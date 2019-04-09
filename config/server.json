@@ -1,0 +1,23 @@
+{
+    "Mode" : "prod",
+    "SecureOnOff" : false,
+    "HpptRedirect" : false,
+    "WebServerIP" : "211.174.49.170",
+    "WebPort" : 8080,
+    "SecureWebPort" : 443,
+    "StreamConnect" : true,
+    "server_access_key" : "AIzaSyAURTN3yKn0U8s6Lbl8rKylrhC4INCi6FA",
+    "cloud" : { 
+        "baseUrl": "https://cloudauth.uplusbox.co.kr:443",
+        "authId": "0000002642",
+        "authKey": "wYV3aJq1vGFntXNtJNFV"
+    },
+    "cloudOpenAPI" : {
+        "baseUrl": "https://openapi.uplusbox.co.kr:447"
+    },
+    "terra": {
+        "baseUrl": "https://lg-api.terra-utm.com",
+        "email": "jbin@lguplus.co.kr",
+        "password": "aldmdro123"
+    }
+}

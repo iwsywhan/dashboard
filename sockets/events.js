@@ -1,0 +1,20 @@
+module.exports = {
+    deleteSTB: 'deleteSTB',
+    retrySTB: 'retrySTB',
+    B100: 'B100',
+    B101: 'B101',
+    B400: 'B400',
+    B500: 'B500',
+    B501: 'B501',
+    B600: 'B600',
+    B900: 'B900',
+    B302: 'B302',
+    B999: 'B999',
+    B998: 'B998',
+    B172: 'B172',
+    B173: 'B173',
+    deleteMobile: 'deleteMobile',
+    addMobile: 'addMobile',
+    service_close: 'service_close',
+    retryVoice: 'retryVoice'
+};

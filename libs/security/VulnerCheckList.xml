@@ -1,0 +1,565 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<SecurityModule>
+	<Service name="common">
+		<Vulnerability name="xss">
+			<Check type="0">
+				<ItemArray>
+		  			<item>;</item>
+					<item><![CDATA[<]]></item>
+					<item><![CDATA[>]]></item>
+					<item><![CDATA[&]]></item>
+					<item>"</item>
+					<item>'</item>
+					<item>#</item>
+					<item>*</item>
+					<item>=</item>
+					<item>+</item>
+			    </ItemArray>
+		  		<StartRegex><![CDATA[ ]]></StartRegex>
+			    <EndRegex><![CDATA[ ]]></EndRegex>
+			    <ReplaceValue><![CDATA[_]]></ReplaceValue>
+			</Check>
+		</Vulnerability>
+		<Vulnerability name="sqlinjection">
+			<Check type="0">
+				<ItemArray>
+		  			<item>;</item>
+					<item><![CDATA[<]]></item>
+					<item><![CDATA[>]]></item>
+					<item><![CDATA[&]]></item>
+					<item>"</item>
+					<item>'</item>
+					<item>+</item>
+					<item>#</item>
+					<item>*</item>
+					<item>=</item>
+					<item>||</item>
+					<item>- -</item>
+					<item>@</item>
+		  		</ItemArray>
+		  		<StartRegex><![CDATA[ ]]></StartRegex>
+			    <EndRegex><![CDATA[ ]]></EndRegex>
+				<ReplaceValue><![CDATA[_]]></ReplaceValue>
+			</Check>
+		</Vulnerability>
+			<Vulnerability name="fileup_img">
+			<Check type="1">
+				<ItemArray>
+					<item>BMP</item>
+					<item>GIF</item>
+					<item>JPEG</item>
+					<item>JPG</item>
+					<item>PNG</item>
+					<item>PSD</item>
+				</ItemArray>
+				<StartRegex><![CDATA[\.]]></StartRegex>
+				<EndRegex><![CDATA[$]]></EndRegex>
+				<ReplaceValue><![CDATA[ ]]></ReplaceValue>
+			</Check>
+		</Vulnerability>
+		<Vulnerability name="fileup_doc">
+			<Check type="1">
+				<ItemArray>
+					<item>TXT</item>
+					<item>DOC</item>
+					<item>DOCX</item>
+					<item>HWP</item>
+					<item>XLS</item>
+					<item>XLSX</item>
+					<item>PPT</item>
+					<item>PPTX</item>
+				</ItemArray>
+				<StartRegex><![CDATA[\.]]></StartRegex>
+				<EndRegex><![CDATA[$]]></EndRegex>
+				<ReplaceValue><![CDATA[ ]]></ReplaceValue>
+			</Check>
+		</Vulnerability>
+		<Vulnerability name="fileup_block">
+			<Check type="1">
+				<ItemArray>
+					<item>JSP</item>
+					<item>WAR</item>
+					<item>ASP</item>
+					<item>ASPX</item>
+					<item>CER</item>
+					<item>CDX</item>
+					<item>ASA</item>
+					<item>HTA</item>
+					<item>HTML</item>
+					<item>SHTML</item>
+					<item>HTM</item>
+					<item>PHP</item>
+					<item>PHP3</item>
+					<item>PHP4</item>
+					<item>PHP5</item>
+					<item>HTACCESS</item>
+				</ItemArray>
+				<StartRegex><![CDATA[\.]]></StartRegex>
+				<EndRegex><![CDATA[ ]]></EndRegex>
+				<ReplaceValue><![CDATA[ ]]></ReplaceValue>
+			</Check>
+			<Check type="0">
+				<ItemArray>
+					<item>JSP</item>
+					<item>WAR</item>
+					<item>ASP</item>
+					<item>ASPX</item>
+					<item>CER</item>
+					<item>CDX</item>
+					<item>ASA</item>
+					<item>HTA</item>
+					<item>HTML</item>
+					<item>SHTML</item>
+					<item>HTM</item>
+					<item>PHP</item>
+					<item>PHP3</item>
+					<item>PHP4</item>
+					<item>PHP5</item>
+					<item>HTACCESS</item>
+				</ItemArray>
+				<StartRegex><![CDATA[\.]]></StartRegex>
+				<EndRegex><![CDATA[ ]]></EndRegex>
+				<ReplaceValue><![CDATA[.lguplus]]></ReplaceValue>
+			</Check>
+			<Check type="0">
+				<ItemArray>
+					<item>%00</item>
+					<item>%0a</item>
+					<item>%zz</item>
+					<item>:</item>
+					<item>;</item>
+					<item>\u0000</item>
+				</ItemArray>
+				<StartRegex><![CDATA[ ]]></StartRegex>
+				<EndRegex><![CDATA[ ]]></EndRegex>
+				<ReplaceValue><![CDATA[_]]></ReplaceValue>
+			</Check>
+		</Vulnerability>
+		<Vulnerability name="filedown">
+			<Check type="1">
+				<ItemArray>
+					<item>../</item>
+					<item>..</item>
+					<item>var/log</item>
+					<item>/var/log</item>
+					<item>etc/passwd</item>
+					<item>/etc/passwd</item>
+					<item>etc/hosts</item>
+					<item>/etc/hosts</item>
+					<item>etc/shadow</item>
+					<item>/etc/shadow</item>
+					<item>root</item>
+					<item>wwwroot</item>
+					<item>[.][.]/</item>
+					<item>/root</item>
+					<item>c:[\]</item>
+					<item>c:/</item>
+					<item>[\]wwwroot</item>
+					<item>/wwwroot</item>
+				</ItemArray>
+				<StartRegex><![CDATA[ ]]></StartRegex>
+				<EndRegex><![CDATA[ ]]></EndRegex>
+				<ReplaceValue><![CDATA[ ]]></ReplaceValue>
+			</Check>
+			<Check type="0">
+				<ItemArray>
+					<item>JSP</item>
+					<item>JAVA</item>
+					<item>CLASS</item>
+					<item>WAR</item>
+					<item>ASP</item>
+					<item>ASPX</item>
+					<item>CS</item>
+					<item>PHP</item>
+					<item>PHP3</item>
+					<item>INC</item>
+					<item>CONF</item>
+					<item>HISTORY</item>
+					<item>bash_history</item>
+					<item>XML</item>
+					<item>LOG</item>
+				</ItemArray>
+				<StartRegex><![CDATA[\.]]></StartRegex>
+				<EndRegex><![CDATA[ ]]></EndRegex>
+				<ReplaceValue><![CDATA[_]]></ReplaceValue>
+			</Check>
+		</Vulnerability>
+		<Vulnerability name="oscommandinjection">
+			<Check type="1">
+				<ItemArray>
+					<item>|</item>
+					<item>||</item>
+					<item>;</item>
+					<item><![CDATA[<]]></item>
+					<item><![CDATA[>]]></item>
+					<item><![CDATA[&]]></item>
+					<item>-</item>
+					<item>^</item>
+					<item>%0D</item>
+					<item>/cgi-bin/</item>
+					<item>wget</item>
+					<item>nc</item>
+					<item>echo</item>
+					<item>tftp</item>
+					<item>cd</item>
+					<item>..</item>
+					<item>/</item>
+					<item>{</item>
+					<item>}</item>
+				</ItemArray>
+				<StartRegex><![CDATA[ ]]></StartRegex>
+				<EndRegex><![CDATA[ ]]></EndRegex>
+				<ReplaceValue><![CDATA[ ]]></ReplaceValue>
+			</Check>
+			<Check type="0">
+				<ItemArray>
+					<item>|</item>
+					<item>||</item>
+					<item>;</item>
+					<item><![CDATA[<]]></item>
+					<item><![CDATA[>]]></item>
+					<item><![CDATA[&]]></item>
+					<item>-</item>
+					<item>^</item>
+					<item>%0D</item>
+					<item>/cgi-bin/</item>
+					<item>wget</item>
+					<item>nc</item>
+					<item>echo</item>
+					<item>tftp</item>
+					<item>cd</item>
+					<item>..</item>
+					<item>/</item>
+					<item>{</item>
+					<item>}</item>
+				</ItemArray>
+				<StartRegex><![CDATA[ ]]></StartRegex>
+				<EndRegex><![CDATA[ ]]></EndRegex>
+				<ReplaceValue><![CDATA[ ]]></ReplaceValue>
+			</Check>
+		</Vulnerability>
+	</Service>
+
+
+	<Service name="forEditor">
+		<Vulnerability name="blockword">
+			<Check type="1">
+				<ItemArray>
+					<item>sex</item>
+						<item>섹스</item>
+						<item>바카라</item>
+						<item>바다이야기</item>
+				</ItemArray>
+				<StartRegex><![CDATA[ ]]></StartRegex>
+				<EndRegex><![CDATA[ ]]></EndRegex>
+				<ReplaceValue><![CDATA[ ]]></ReplaceValue>
+			</Check>
+		</Vulnerability>
+		<Vulnerability name="xss">
+			<Check type="0">
+				<ItemArray>
+					<!-- <item>STYLE</item> -->
+	    			<item>ONABORT</item>
+					<item>ONBLUR</item>
+					<item>ONCHANGE</item>
+					<item>ONCLICK</item>
+					<item>ONDBCLICK</item>
+					<item>ONERROR</item>
+					<item>ONFOCUS</item>
+					<item>ONKEYDOWN</item>
+					<item>ONKEYUP</item>
+					<item>ONKEYPRESS</item>
+					<item>ONLOAD</item>
+					<item>ONMOUSEDOWN</item>
+					<item>ONMOUSEMOVE</item>
+					<item>ONMOUSEOUT</item>
+					<item>ONMOUSEOVER</item>
+					<item>ONMOUSEUP</item>
+					<item>ONRESET</item>
+					<item>ONRESIZE</item>
+					<item>ONSELECT</item>
+					<item>ONSUBMIT</item>
+					<item>ONUNLOAD</item>
+					<item>ONFILTERCHANGE</item>
+					<item>ONDRAGDROP</item>
+					<item>EXPRESSION</item>
+					<item>ONMOVE</item>
+    			</ItemArray>
+    			<StartRegex><![CDATA[ ]]></StartRegex>
+			    <EndRegex><![CDATA[\s*]]></EndRegex>
+				<ReplaceValue><![CDATA[onlg=]]></ReplaceValue>
+			</Check>
+			<Check type="0">
+				<ItemArray>
+					<item>JAVASCRIPT</item>
+					<item>VBSCRIPT</item>
+  				</ItemArray>
+		  		<StartRegex><![CDATA[ ]]></StartRegex>
+  				<EndRegex><![CDATA[\s*:]]></EndRegex>
+  				<ReplaceValue><![CDATA[onlg:]]></ReplaceValue>
+			</Check>
+			<Check type="0">
+				<ItemArray>
+  		  			<item>DOCUMENT</item>
+					<item>COOKIE</item>
+  		  </ItemArray>
+  		  <StartRegex><![CDATA[ ]]></StartRegex>
+  		  <EndRegex><![CDATA[ ]]></EndRegex>
+  		  <ReplaceValue><![CDATA[ ]]></ReplaceValue>
+			</Check>
+			<Check type="1">
+				<ItemArray>
+					<item>SCRIPT</item>
+					<item>EMBED</item>
+					<item>IFRAME</item>
+					<item>OBJECT</item>
+					<!-- <item>STYLE</item> -->
+					<item>META</item>
+					<item>FRAME</item>
+					<item>APPLET</item>
+					<item>BASE</item>
+					<item>FRAMESET</item>
+					<item>A</item>
+				</ItemArray>
+				<StartRegex><![CDATA[<\s*]]></StartRegex>
+				<EndRegex><![CDATA[\b]]></EndRegex>
+				<ReplaceValue><![CDATA[&lt;ITEM]]></ReplaceValue>
+			</Check>
+			<Check type="1">
+				<ItemArray>
+					<item>SCRIPT</item>
+					<item>EMBED</item>
+					<item>IFRAME</item>
+					<item>OBJECT</item>
+					<!-- <item>STYLE</item> -->
+					<item>META</item>
+					<item>FRAME</item>
+					<item>APPLET</item>
+					<item>BASE</item>
+					<item>FRAMESET</item>
+					<item>A</item>
+				</ItemArray>
+				<StartRegex><![CDATA[</\s*]]></StartRegex>
+				<EndRegex><![CDATA[\b]]></EndRegex>
+				<ReplaceValue><![CDATA[&lt;ITEM]]></ReplaceValue>
+			</Check>
+		</Vulnerability>
+		<Vulnerability name="sqlinjection">
+			<Check type="1">
+    			<ItemArray>
+    				<item>-</item>
+					<item>--</item>
+					<item>#</item>
+					<item>/*</item>
+					<item>;</item>
+					<item>select</item>
+					<item>delete</item>
+					<item>update</item>
+					<item>insert</item>
+					<item>create</item>
+					<item>drop</item>
+					<item>or</item>
+					<item>and</item>
+					<item>if</item>
+					<item>end</item>
+					<item>having</item>
+					<item>group by</item>
+					<item>union</item>
+					<item>waitfor</item>
+					<item>declare</item>
+					<item>exec</item>
+					<item>execute</item>
+					<item>bulk</item>
+					<item>begin</item>
+					<item>declare</item>
+					<item>fetch</item>
+					<item>kill</item>
+					<item>open</item>
+					<item>master</item>
+					<item>sys</item>
+					<item>sysobjects</item>
+					<item>syscolumns</item>
+					<item>table</item>
+    			</ItemArray>
+    			<StartRegex><![CDATA['\s*]]></StartRegex>
+    			<EndRegex><![CDATA[(\s|$|/\*)]]></EndRegex>
+    			<ReplaceValue><![CDATA[ITEM_lg]]></ReplaceValue>
+			</Check>
+			<Check type="0">
+    			<ItemArray>
+    				<item>sys.user$</item>
+					<item>all_users</item>
+					<item>session_privs</item>
+					<item>dba_sys_privs</item>
+					<item>all_</item>
+					<item>sys.tab</item>
+					<item>SYSAUX</item>
+					<item>user_tables</item>
+					<item>master..</item>
+					<item>syscolumns</item>
+					<item>sysobjects</item>
+					<item>sys.sql_logins</item>
+					<item>_name</item>
+					<item>information_schema</item>
+					<item>dbms_lock</item>
+					<item>.sleep</item>
+					<item>UTL_</item>
+					<item>.get_host_name</item>
+					<item>.get_host_address</item>
+					<item>.REQUEST</item>
+					<item>to_</item>
+					<item>SYS.DATABASE_NAME</item>
+					<item>chartorowid</item>
+					<item>hextoraw</item>
+					<item>username</item>
+					<item>sys_</item>
+					<item>userenv</item>
+					<item>user_name</item>
+					<item>is_srvrolemember</item>
+					<item>TYPE_NAME</item>
+					<item>HOST_NAME</item>
+					<item>quotename</item>
+					<item>sp_</item>
+					<item>xp_cmdshell</item>
+					<item>SERVERNAME</item>
+					<item>SYSTEM_USER</item>
+					<item>procedure</item>
+					<item>session_user</item>
+					<item>group_concat</item>
+					<item>concat_ws</item>
+					<item>ifnull</item>
+    			</ItemArray>
+    			<StartRegex><![CDATA[ ]]></StartRegex>
+    			<EndRegex><![CDATA[ ]]></EndRegex>
+    			<ReplaceValue><![CDATA[onlg]]></ReplaceValue>
+			</Check>
+			<Check type="0">
+    			<ItemArray>
+					<item>@@</item>
+					<item>banner</item>
+					<item>version</item>
+					<item>1</item>
+					<item>user</item>
+					<item>name</item>
+					<item>spare4</item>
+					<item>grantee</item>
+					<item>any</item>
+					<item>distinct</item>
+					<item>golobal_name</item>
+					<item>instance_name</item>
+					<item>column_name</item>
+					<item>table_</item>
+					<item>owner</item>
+					<item>case</item>
+					<item>value</item>
+					<item>host_name</item>
+					<item>loginame</item>
+					<item>password</item>
+					<item>master.dbo.fn_varbintohexstr</item>
+					<item>password_hash</item>
+					<item>sysobjects.name</item>
+					<item>TOP</item>
+					<item>@host</item>
+					<item>grantee</item>
+					<item>privilege_type</item>
+					<item>is_grantable</item>
+    			</ItemArray>
+    			<StartRegex><![CDATA[\s*s\s*e\s*l\s*e\s*c\s*t\s*]]></StartRegex>
+    			<EndRegex><![CDATA[ ]]></EndRegex>
+    			<ReplaceValue><![CDATA[ITEM_lg]]></ReplaceValue>
+			</Check>
+			<Check type="0">
+    			<ItemArray>
+    			</ItemArray>
+    			<StartRegex><![CDATA[ ]]></StartRegex>
+    			<EndRegex><![CDATA[ ]]></EndRegex>
+    			<ReplaceValue><![CDATA[_]]></ReplaceValue>
+			</Check>
+			<Check type="0">
+    			<ItemArray>
+    				<item>=</item>
+    				<item>></item>
+    				<item><![CDATA[<]]></item>
+    			</ItemArray>
+    			<StartRegex><![CDATA[(\s*o\s*r\s*|\s*a\s*n\s*d\s*)([0-9]+|'.+'|".+")\s*]]></StartRegex>
+    			<EndRegex><![CDATA[ ]]></EndRegex>
+    			<ReplaceValue><![CDATA[_]]></ReplaceValue>
+			</Check>
+		</Vulnerability>
+		<Vulnerability name="fileup_img">
+			<Check type="1">
+    			<ItemArray>
+    				<item>BMP</item>
+					<item>GIF</item>
+					<item>JPEG</item>
+					<item>JPG</item>
+					<item>PNG</item>
+					<item>PSD</item>
+    			</ItemArray>
+    			<StartRegex><![CDATA[\.]]></StartRegex>
+    			<EndRegex><![CDATA[$]]></EndRegex>
+    			<ReplaceValue><![CDATA[ ]]></ReplaceValue>
+			</Check>
+		</Vulnerability>
+		<Vulnerability name="fileup_doc">
+			<Check type="1">
+    			<ItemArray>
+    				<item>TXT</item>
+					<item>DOCX</item>
+					<item>HWP</item>
+					<item>XLS</item>
+					<item>XLSX</item>
+					<item>PPT</item>
+					<item>PPTX</item>
+    			</ItemArray>
+    			<StartRegex><![CDATA[\.]]></StartRegex>
+    			<EndRegex><![CDATA[$]]></EndRegex>
+    			<ReplaceValue><![CDATA[ ]]></ReplaceValue>
+			</Check>
+		</Vulnerability>
+		<Vulnerability name="fileup_block">
+			<Check type="1">
+    			<ItemArray>
+    				<item>ASP</item>
+					<item>ASPX</item>
+					<item>CER</item>
+					<item>CDX</item>
+					<item>ASA</item>
+					<item>HTA</item>
+					<item>HTML</item>
+					<item>JSP</item>
+					<item>WAR</item>
+					<item>JSV</item>
+					<item>JSW</item>
+					<item>JSPF</item>
+					<item>JSPX</item>
+					<item>PHP</item>
+					<item>PHP3</item>
+					<item>PHP5</item>
+					<item>CGI</item>
+					<item>CSHTML</item>
+    			</ItemArray>
+    			<StartRegex><![CDATA[\.]]></StartRegex>
+    			<EndRegex><![CDATA[$]]></EndRegex>
+    			<ReplaceValue><![CDATA[_]]></ReplaceValue>
+			</Check>
+		</Vulnerability>
+		<Vulnerability name="filedown">
+			<Check type="1">
+    		<ItemArray>
+    			<item>[.][.]/</item>
+				<item>/etc/passwd</item>
+				<item>/etc/hosts</item>
+				<item>/root</item>
+				<item>c:[\]</item>
+				<item>c:/</item>
+				<item>[\]wwwroot</item>
+				<item>/wwwroot</item>
+    		</ItemArray>
+    		<StartRegex><![CDATA[ ]]></StartRegex>
+    		<EndRegex><![CDATA[ ]]></EndRegex>
+    		<ReplaceValue><![CDATA[ ]]></ReplaceValue>
+			</Check>
+		</Vulnerability>
+	</Service>
+</SecurityModule>
