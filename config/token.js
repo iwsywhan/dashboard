@@ -1,2 +1,2 @@
-var jwt_secret = 'WE ARE AWESOME YEAH! HAPPY CODING~';
+var jwt_secret = '!@#openlabstartserver';
 module.exports = jwt_secret;

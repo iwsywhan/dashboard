@@ -1,4 +1,3 @@
-var entries = require('object.entries');
 
 function Body() {
     this._offset = 0;

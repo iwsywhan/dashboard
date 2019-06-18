@@ -4,7 +4,8 @@ var merge = require('merge');
 var struct = require('../coupledMessage.js');
 var aes256cbc = require('../aes256cbc.js');
 var dbConn = require('../db');
-var gcm = require('node-gcm');
+// var gcm = require('node-gcm');
+var fcm = require('fcm-node');
 var util = require('util');
 var fs = require('fs');
 var app = require('../app');
@@ -27,7 +28,7 @@ var PC = 3;
 
 var regQueue = [];
 
-
+if (false) {
 (function connect() {
 
     function reconnect() {
@@ -63,17 +64,17 @@ var regQueue = [];
     });
 
     client.on('close', function() {
-        logger.crit('Connection closed');
-
+        // logger.crit('Connection closed');
         reconnect();
     });
 
     client.on('error', function(err) {
-        logger.crit('connect error', err);
+        // logger.crit('connect error', err);
     });
 
     //process.stdin.pipe(client, {end: false});
 }());
+}
 
 function parsingMessage(data) {
     struct.parsingBodyData(data, function(error, header, body, unProcessedBuf) {

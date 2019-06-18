@@ -5,15 +5,10 @@ module.exports = function (req, res, next) {
     if (req.url === '/logout') {
         next();
     }
-    var authrizationHeader = req.headers['authorization'];
+    // var authrizationHeader = req.headers['authorization'];
+    const token = req.headers['x-access-token'];
 
-    // var ip = req.headers['x-forwarded-for'] ||
-    // req.connection.remoteAddress ||
-    // req.socket.remoteAddress ||
-    // req.connection.socket.remoteAddress;
-    var token = authrizationHeader.split(' ')[1];
-    
-    if (!authrizationHeader) {
+    if (!token) {
         res.sendStatus(401);
     }
 

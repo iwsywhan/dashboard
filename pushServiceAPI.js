@@ -3,21 +3,8 @@
  */
 
 var util = require('util');
-var winston = require('winston');
-var moment = require('moment');
+const logger = require('./libs/logger')
 
-var logger = new (winston.Logger)({ 
-	transports: [
-     new winston.transports.DailyRotateFile({
-         name: 'dailyInfoLog',
-         level:'info',
-         filename: '/LCS/daily-',
-         timestamp: function(){return moment().format("YYYY-MM-DD HH:mm:ss.SSS");},
-         datePattern : 'yyyyMMdd.log',
-         json:false
-       })
-   ]
-});
 /*
 	함수 설명 : GCM 서버로 PUSH 하기전에 Reg ID를 얻어오는 함수  
 */

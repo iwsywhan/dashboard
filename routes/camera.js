@@ -4,20 +4,19 @@ var logger = require('../libs/logger');
 var fs = require('fs')
 var dbConn = require('../db')
 var util = require('util')
-var ejs = require('ejs')
+// var ejs = require('ejs')
 
 module.exports = router;
 
-router.get('/v', function(req, res) {
-    fs.readFile('html/camera_control.html', 'utf8', function(error, data) {
-        res.send(data);
-        // res.send(ejs.render(data, {}));
-    });
-});
+// router.get('/v', function(req, res) {
+//     fs.readFile('html/camera_control.html', 'utf8', function(error, data) {
+//         res.send(data);
+//     });
+// });
 
 router.get('/popup/v', function(req, res) {
 	var type = typeof req.query.cam_nm === "undefined" ? 'add' : 'modify';
-    fs.readFile('html/camera_control_popup.html', 'utf8', function(error, data) {
+    // fs.readFile('html/camera_control_popup.html', 'utf8', function(error, data) {
         if (type === 'modify') {
 			var query = util.format("SELECT * " + 
 			",CASE WHEN BIN(CAM_RESOLUTION) & BIN(4) > 0 THEN 'FHD' ELSE '' END CAM_RESOLUTION_FHD " +
@@ -27,16 +26,17 @@ router.get('/popup/v', function(req, res) {
 			, req.query.cam_nm);
             logger.info('Query: ', query);
             dbConn.query(query, function (error, results) {
-                res.send(ejs.render(data, {
+                // res.send(ejs.render(data, {
+                res.send({
                     data: results[0], type: type
-                }));
+                });
             });
         } else {					// add
             res.send(ejs.render(data, {
                 data: "", type: type
             }));
         }
-    });
+    // });
 });
 
 router.post('/', function(req, res) {

@@ -3,14 +3,16 @@ var moment = require('moment');
 var path = require('path');
 var fs = require('fs');
 
-var LOGGER_FOLDER_PATH = '/LCS/APP/LOG/WEBAPP/daily-w';
+
+// var LOGGER_FOLDER_PATH = '/LCS/APP/LOG/WEBAPP/daily-w';
+var LOGGER_FOLDER_PATH = './logs/daily-';
 
 /* log 관리 */
-var logger = new(winston.Logger)({
+var logger = winston.createLogger({
+    leve: 'info',
     transports: [
-        new winston.transports.DailyRotateFile({
+        new winston.transports.File({
             name: 'dailyInfoLog',
-            level: 'emerg',
             filename: '' + LOGGER_FOLDER_PATH,
             timestamp: function() {
                 return moment().format("YYYY-MM-DD HH:mm:ss.SSS");
@@ -21,8 +23,8 @@ var logger = new(winston.Logger)({
     ]
 });
 
-winston.setLevels(winston.config.syslog.levels);
-logger.setLevels(winston.config.syslog.levels);
+// winston.setLevels(winston.config.syslog.levels);
+// logger.setLevels(winston.config.syslog.levels);
 
 logger.info('init logger');
 

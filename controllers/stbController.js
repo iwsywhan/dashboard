@@ -2,7 +2,6 @@ var dbConn = require('../db');
 var logger = require('../libs/logger');
 var util = require('util');
 var pushServiceAPI = require('../pushServiceAPI.js');
-var decodeJWT = require('../libs/decodeJWT');
 
 var service = function(req, res) {
     logger.info('Path change : /stbService');

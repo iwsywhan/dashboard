@@ -3,15 +3,13 @@ var router = express.Router();
 var bodyParser = require('body-parser');
 var logger = require('../libs/logger');
 var fs = require('fs');
-var ejs = require('ejs');
 var pcViewerAPI = require('../pcViewerAPI.js');
 var LiveCam2UTM = require('../libs/LiveCam2UTM');
 var Protocol = require('../libs/Protocol');
 var CloudLib = require('../libs/CloudLib');
 var app = require('../app.js');
-var utilLib = require('../public/javascripts/utilLib');
+var utilLib = require('../libs/utilLib');
 var util = require('util');
-var decodeJWT = require('../libs/decodeJWT');
 var client = require('../socketClient');
 
 var serverConf = JSON.parse(fs.readFileSync("./config/server.json"));
@@ -24,122 +22,105 @@ module.exports = router;
 /* 드론 기능에 대한 api */
 router.post('/v1/startRecording', function(req, res) {
     logger.info('Path change : /livecam/v1/startRecording');
-    var JWT = decodeJWT(req, res, function(result, token) {
-        if (result) {
-            var query = util.format("SELECT * FROM TB_TERMINAL_IMAGE_TRANS WHERE CUST_CTN = '%s' AND SVC_TYPE = '0' AND STATUS = '1'", req.body.MOBILE_NUM);
-        app.dbConn.query(query, function (error, results) {
-                    if (error) {
-                    } else {
-                        if (results.length > 0) {                    
-                            var body = {};
-                            body = req.body;
-                            body.DEV_TYPE = '4';
-                            body.SYS_TYPE = '1';
-                            body.MIN_STOR_SIZE = '10';
-                            body.USER_ID = token.id;
-                            body.CONTROL_ID = req.body.CONTROL_ID + token.code_03;
-            
-                            var protocol = new Protocol('B207', body);
-                            var packet = protocol.make();
-                            client.write(packet);
-                            app.droneResult.setResponse(res);
-                        } else {
-                            res.send({result:false, data: null, error: {code: '100', message:'연결된 드론이 존재하지 않습니다.'}});
-                        }
-                    }
-                });
+    var query = util.format("SELECT * FROM TB_TERMINAL_IMAGE_TRANS WHERE CUST_CTN = '%s' AND SVC_TYPE = '0' AND STATUS = '1'", req.body.MOBILE_NUM);
+    app.dbConn.query(query, function (error, results) {
+        if (error) {
+        } else {
+            if (results.length > 0) {                    
+                var body = {};
+                body = req.body;
+                body.DEV_TYPE = '4';
+                body.SYS_TYPE = '1';
+                body.MIN_STOR_SIZE = '10';
+                body.USER_ID = req.session.userid;
+                body.CONTROL_ID = req.body.CONTROL_ID + req.session.code_03;
+
+                var protocol = new Protocol('B207', body);
+                var packet = protocol.make();
+                client.write(packet);
+                app.droneResult.setResponse(res);
+            } else {
+                res.send({result:false, data: null, error: {code: '100', message:'연결된 드론이 존재하지 않습니다.'}});
+            }
         }
-    });
+    });
 });
 
 /* 드론 기능에 대한 api */
 router.post('/v1/stopRecording', function(req, res) {
     logger.info('Path change : /livecam/v1/stopRecording');
-    var JWT = decodeJWT(req, res, function(result, token) {
-        if (result) {
-            var query = util.format("SELECT * FROM TB_TERMINAL_IMAGE_TRANS WHERE CUST_CTN LIKE '%s%%' AND STATUS = '2'", req.body.MOBILE_NUM.split('__')[0]);
-            logger.info('stopRecording', query);
-            app.dbConn.query(query, function (error, results1) {
-                if (error) {
-                } else {
-                    logger.info('results.length', results1[0])
-                    if (results1.length) {
-                        var body = {};
-                        body.MOBILE_NUM = req.body.MOBILE_NUM;
-                        body.CTN_DEVICE = results1[0].CTN_DEVICE;
-                        body.DEV_TYPE = '4';
-                        body.SYS_TYPE = '1';
-                        body.USER_ID = token.id;
-            
-                        var protocol = new Protocol('B903', body);
-                        var packet = protocol.make();
-                        client.write(packet);
-                        app.droneResult.setResponse(res);
-                    } else {
-                        res.send('이미 종료된 상태입니다.');
-                    }
-                }
-            });
-        } 
-    });
+    var query = util.format("SELECT * FROM TB_TERMINAL_IMAGE_TRANS WHERE CUST_CTN LIKE '%s%%' AND STATUS = '2'", req.body.MOBILE_NUM.split('__')[0]);
+    logger.info('stopRecording', query);
+    app.dbConn.query(query, function (error, results1) {
+        if (error) {
+        } else {
+            logger.info('results.length', results1[0])
+            if (results1.length) {
+                var body = {};
+                body.MOBILE_NUM = req.body.MOBILE_NUM;
+                body.CTN_DEVICE = results1[0].CTN_DEVICE;
+                body.DEV_TYPE = '4';
+                body.SYS_TYPE = '1';
+                body.USER_ID = req.session.userid;
+    
+                var protocol = new Protocol('B903', body);
+                var packet = protocol.make();
+                client.write(packet);
+                app.droneResult.setResponse(res);
+            } else {
+                res.send('이미 종료된 상태입니다.');
+            }
+        }
+    });
 });
 
 router.post('/v1/startSnapshot', function(req, res) {
     logger.info('Path change : /livecam/v1/startSnapshot', req.body);
-    var JWT = decodeJWT(req, res, function(result, token) {
-        if (result) {
-            var query = util.format("SELECT CTN_DEVICE FROM TB_TERMINAL_IMAGE_TRANS WHERE CUST_CTN = '%s' AND STATUS < '3'", req.body.MOBILE_NUM);
-            app.dbConn.query(query, function (error, results) {
-                if (error) {
-                    res.send({result: false, data: null, error: {code:500, message: 'System Error'}});
-                } else {
-                    var body = {};
-                    body.MOBILE_NUM = req.body.MOBILE_NUM;
-                    body.CTN_DEVICE = results[0].CTN_DEVICE;
-                    body.DEV_TYPE = '4';
-                    body.SYS_TYPE = '1';
-                    body.SHOT_COUNT = req.body.SHOT_COUNT;
-                    body.SHOT_PERIOD = req.body.SHOT_PERIOD;
-                    body.RESET_FLAG = req.body.RESET_FLAG;
-                    body.JUST_UPLOAD_FLAG = req.body.JUST_UPLOAD_FLAG;
-                    body.USER_ID = token.id;
-        
-                    var protocol = new Protocol('B170', body);
-                    var packet = protocol.make();
-                    client.write(packet);
-                    app.droneResult.setResponse(res);
-                }
-            });
+    var query = util.format("SELECT CTN_DEVICE FROM TB_TERMINAL_IMAGE_TRANS WHERE CUST_CTN = '%s' AND STATUS < '3'", req.body.MOBILE_NUM);
+    app.dbConn.query(query, function (error, results) {
+        if (error) {
+            res.send({result: false, data: null, error: {code:500, message: 'System Error'}});
+        } else {
+            var body = {};
+            body.MOBILE_NUM = req.body.MOBILE_NUM;
+            body.CTN_DEVICE = results[0].CTN_DEVICE;
+            body.DEV_TYPE = '4';
+            body.SYS_TYPE = '1';
+            body.SHOT_COUNT = req.body.SHOT_COUNT;
+            body.SHOT_PERIOD = req.body.SHOT_PERIOD;
+            body.RESET_FLAG = req.body.RESET_FLAG;
+            body.JUST_UPLOAD_FLAG = req.body.JUST_UPLOAD_FLAG;
+            body.USER_ID = req.session.userid;
+
+            var protocol = new Protocol('B170', body);
+            var packet = protocol.make();
+            client.write(packet);
+            app.droneResult.setResponse(res);
         }
     });
 });
 
 router.post('/v1/upload', function(req, res) {
     logger.info('Path change : /livecam/v1/upload', req.body);
+    var query = util.format("SELECT CTN_DEVICE FROM TB_TERMINAL_IMAGE_TRANS WHERE CUST_CTN = '%s' AND STATUS < '3'", req.body.MOBILE_NUM);
+    app.dbConn.query(query, function (error, results) {
+        if (error) {
+            res.send({result: false, data: null, error: {code:500, message: 'System Error'}});
+        } else {
+            var body = {};
+            body.MOBILE_NUM = req.body.MOBILE_NUM;
+            body.CTN_DEVICE = results[0].CTN_DEVICE;
+            body.DEV_TYPE = '4';
+            body.SYS_TYPE = '1';
+            body.UPLOAD_TYPE = req.body.UPLOAD_TYPE;
+            body.UPLOAD_DEL_FLAG = req.body.UPLOAD_DEL_FLAG;
+            body.UPLOAD_TODAY_FLAG = req.body.UPLOAD_TODAY_FLAG;
+            body.USER_ID = req.session.userid;
 
-    var JWT = decodeJWT(req, res, function(result, token) {
-        if (result) {
-            var query = util.format("SELECT CTN_DEVICE FROM TB_TERMINAL_IMAGE_TRANS WHERE CUST_CTN = '%s' AND STATUS < '3'", req.body.MOBILE_NUM);
-            app.dbConn.query(query, function (error, results) {
-                if (error) {
-                    res.send({result: false, data: null, error: {code:500, message: 'System Error'}});
-                } else {
-                    var body = {};
-                    body.MOBILE_NUM = req.body.MOBILE_NUM;
-                    body.CTN_DEVICE = results[0].CTN_DEVICE;
-                    body.DEV_TYPE = '4';
-                    body.SYS_TYPE = '1';
-                    body.UPLOAD_TYPE = req.body.UPLOAD_TYPE;
-                    body.UPLOAD_DEL_FLAG = req.body.UPLOAD_DEL_FLAG;
-                    body.UPLOAD_TODAY_FLAG = req.body.UPLOAD_TODAY_FLAG;
-                    body.USER_ID = token.id;
-        
-                    var protocol = new Protocol('B171', body);// 중계서버랑 통신.
-                    var packet = protocol.make();
-                    client.write(packet);
-                    app.droneResult.setResponse(res); 
-                }
-            });
+            var protocol = new Protocol('B171', body);// 중계서버랑 통신.
+            var packet = protocol.make();
+            client.write(packet);
+            app.droneResult.setResponse(res); 
         }
     });
 });

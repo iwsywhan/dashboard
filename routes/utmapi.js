@@ -12,7 +12,6 @@ var app = require('../app.js');
 var utilLib = require('../public/javascripts/utilLib');
 var util = require('util');
 var serverConf = JSON.parse(fs.readFileSync("./config/server.json"));
-var decodeJWT = require('../libs/decodeJWT');
 var client = require('../socketClient')
 var AccountResult = require('../libs/AccountResult')
 var accountC = require('../controllers/accountController');

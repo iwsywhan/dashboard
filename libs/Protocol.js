@@ -3,7 +3,6 @@
  * 임대형 node 버전은 v0.10 이기 때문에 object.entries 모듈 필요
 */
 
-var entries = require('object.entries');
 var Header = require('./Header');
 var Body = require('./Body');
 var logger = require('./logger');

@@ -5,15 +5,11 @@ var logger = require('../libs/logger');
 var util = require('util');
 var dbConn = require('../db');
 var menuConf = JSON.parse(fs.readFileSync("./config/menu.json"));
-var socketio = require('../sockets').io();
 var app = require('../app');
 var jwt = require('jsonwebtoken');
 var tokenConfig = require('../config/token');
 var g_bEnableSha256 = false;
-var decodeJWT = require('../libs/decodeJWT');
-var ejs = require('ejs');
-var utilLib = require('../public/javascripts/utilLib');
-
+var utilLib = require('../libs/utilLib');
 
 EnableMysqlSha256();
 
@@ -271,7 +267,7 @@ var logout2 = function(req, res) {
 };
 
 var topstate = function(request, response) {
-    fs.readFile('html/top.html', 'utf8', function(error, data) {    
+    // fs.readFile('html/top.html', 'utf8', function(error, data) {    
         var mVoIP, drone;
         var query = util.format('SELECT SV_OP_SV_V, SV_OP_SV_DR FROM TB_CUSTOMER WHERE CUSTOMER_CODE = \'%s\'', request.session.code_03);
         logger.info('Query:', query);
@@ -285,71 +281,71 @@ var topstate = function(request, response) {
                     drone = results[0].SV_OP_SV_DR;
                 }
 
-                response.send(ejs.render(data, {// token 방식으로 맞게 수정함
+                // response.send(ejs.render(data, {
+                response.send({
                     data: {
                         'session': request.session.userid,
                         'session_lv': request.session.userlv,
                         'isEnableLocale': request.session.locale,
-                        // 'session_pw': request.session.userpw,
-                        // 's_date': s_date,
                         'mVoIP': mVoIP,
                         'drone': drone,
                         'menu': menuConf
                     }
-                }));
+                });
             }            
         });
-    });
+    // });
 };
 
-var tken = function(req, res) {
-    var array;
-    var JWT = decodeJWT(req, res, function(result, jwtToken) {
-        if (result) {
-            console.log(token)
-            var authrizationHeader = req.params.tken || req.headers['authorization'];
-            var token = Array.isArray(authrizationHeader.split(' ')) ? authrizationHeader.split(' ')[1] : authrizationHeader;
-            var ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+/**
+ * reverse proxy에서 처리해야할 내용
+ * @param {*} a 
+ * @param {*} b 
+ */
+// var tken = function(req, res) {
+//     var array;
+//     var JWT = decodeJWT(req, res, function(result, jwtToken) {
+//         if (result) {
+//             console.log(token)
+//             var authrizationHeader = req.params.tken || req.headers['authorization'];
+//             var token = Array.isArray(authrizationHeader.split(' ')) ? authrizationHeader.split(' ')[1] : authrizationHeader;
+//             var ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
         
-            if (Array.isArray(authrizationHeader.split(' ')) && authrizationHeader.split(' ').length > 2) {
-                array = authrizationHeader.split(' ');
-            }
-            console.log(jwtToken, ip)
+//             if (Array.isArray(authrizationHeader.split(' ')) && authrizationHeader.split(' ').length > 2) {
+//                 array = authrizationHeader.split(' ');
+//             }
             
-                fs.readFile('html/tken.html', 'utf8', function(error, data) {
-                    var url = req.url;
-                    var redirect;
-                    
-                    req.session.userid = jwtToken.id;
-                    req.session.ip = jwtToken.ip;
-                    req.session.userlv = jwtToken.userlv;
-                    req.session.code_03 = jwtToken.code_03;
-                    req.session.code_02 = jwtToken.code_02;
-                    req.session.code_01 = jwtToken.code_01;
-                    req.session.drone = 'Y';
-					//req.session.cookie.path = '/admin';
-                    console.log('tken---------------------', req.session)
-                    if (url.includes('drone')) {
-                        redirect = '/drone';
-                    } else if (url.includes('serviceMultiPC')) {
-                        redirect = '/serviceMultiPC/ctn?cust=' + array[2]+ '&device=' + array[3] + '&insertdate=' + array[4];
-                    } else if (url.includes('serviceMultiMobile')) {
-                        redirect = '/serviceMultiMobile/ctn?cust=' + array[2]+ '&device=' + array[3] + '&insertdate=' + array[4];
-                    } else if (url.includes('serviceMultiSTB')) { 
-                        redirect = '/serviceMultiSTB/ctn?cust=' + array[2]+ '&device=' + array[3] + '&insertdate=' + array[4];
-                    }
-                    
-                    res.send(ejs.render(data, {
-                        data: {
-                            ttkken: token,
-                            redirect: redirect
-                        }
-                    }));
-                });
-        }
-    });
-
-};
+//             var url = req.url;
+//             var redirect;
+            
+//             req.session.userid = jwtToken.id;
+//             req.session.ip = jwtToken.ip;
+//             req.session.userlv = jwtToken.userlv;
+//             req.session.code_03 = jwtToken.code_03;
+//             req.session.code_02 = jwtToken.code_02;
+//             req.session.code_01 = jwtToken.code_01;
+//             req.session.drone = 'Y';
+//             //req.session.cookie.path = '/admin';
+//             console.log('tken---------------------', req.session)
+//             if (url.includes('drone')) {
+//                 redirect = '/drone';
+//             } else if (url.includes('serviceMultiPC')) {
+//                 redirect = '/serviceMultiPC/ctn?cust=' + array[2]+ '&device=' + array[3] + '&insertdate=' + array[4];
+//             } else if (url.includes('serviceMultiMobile')) {
+//                 redirect = '/serviceMultiMobile/ctn?cust=' + array[2]+ '&device=' + array[3] + '&insertdate=' + array[4];
+//             } else if (url.includes('serviceMultiSTB')) { 
+//                 redirect = '/serviceMultiSTB/ctn?cust=' + array[2]+ '&device=' + array[3] + '&insertdate=' + array[4];
+//             }
+            
+//             res.send({
+//                 data: {
+//                     ttkken: token,
+//                     redirect: redirect
+//                 }
+//             });
+//         }
+//     });
+// };
 
 function HrefVar(a, b) {
     var vara = a.split(b);
@@ -641,7 +637,6 @@ module.exports = {
     logout: logout,
     logout2: logout2,
     topstate: topstate,
-    tken: tken,
     loginR: loginR,
     loginPost: loginPost
 };

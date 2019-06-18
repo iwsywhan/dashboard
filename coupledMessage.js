@@ -4,24 +4,8 @@
 
 var Struct = require('struct');
 var querystring = require('querystring');
-var utilLib = require('./public/javascripts/utilLib');
-var winston = require('winston');
-var moment = require('moment');
-
-var LOGGER_FOLDER_PATH = '/LCS/APP/LOG/WEBAPP/daily-w';
-
-var logger = new (winston.Logger)({ 
-	transports: [
-     new winston.transports.DailyRotateFile({
-         name: 'dailyInfoLog',
-         level:'info',
-         filename: LOGGER_FOLDER_PATH,
-         timestamp: function(){return moment().format("YYYY-MM-DD HH:mm:ss.SSS");},
-         datePattern : 'yyyyMMdd.log',
-         json:false
-       })
-   ]
-});
+var logger = require('./libs/logger');
+var utilLib = require('./libs/utilLib');
 
 var ctasMessageSt = Struct()
         .chars('prefix',2)

@@ -4,7 +4,7 @@ var EventEmitter   = require('events').EventEmitter;
 var Result = require('./Result');
 var fs = require('fs');
 var querystring = require('querystring');
-var entries = require('object.entries');
+// var entries = require('object.entries');
 // var utilLib = require('./utilLib.js');
 
 module.exports = CloudHistory;

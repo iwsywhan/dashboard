@@ -3,17 +3,16 @@ var router = express.Router();
 var bodyParser = require('body-parser');
 var logger = require('../libs/logger');
 var fs = require('fs');
-var ejs = require('ejs');
+// var ejs = require('ejs');
 var pcViewerAPI = require('../pcViewerAPI.js');
 var LiveCam2UTM = require('../libs/LiveCam2UTM');
 var Protocol = require('../libs/Protocol');
 var CloudLib = require('../libs/CloudLib');
 var TerraLib = require('../libs/TerraLib');
 // var app = require('../js');
-var utilLib = require('../public/javascripts/utilLib');
+var utilLib = require('../libs/utilLib');
 var util = require('util');
 var serverConf = JSON.parse(fs.readFileSync("./config/server.json"));
-var decodeJWT = require('../libs/decodeJWT');
 var client = require('../socketClient')
 var dbConn = require('../db')
 
@@ -25,38 +24,6 @@ var terraLib = new TerraLib();
 
 module.exports = router;
 
-router.all('*', function(req, res, next) {    
-    if (req.session.drone === 'Y') {
-        next();
-    } else {
-        decodeJWT(req, res, function(result, token) {
-            if (result) {
-                if (!token.drone) {
-                    next();
-                } else {
-                    res.redirect('/notaccess');
-                }
-            } else {
-                res.redirect('/notaccess');
-            }            
-        });
-    } 
-});
-
-router.get('/', function(req, res) {
-    logger.info('Path change : /drone'); 
-  
-        fs.readFile('html/drone.html', 'utf8', function(error, data) {
-            res.send(ejs.render(data, {}));
-        });    
-});
-
-router.get('/report', function(req, res) {
-    logger.info('Path change : /drone/report');
-    fs.readFile('html/drone_report.html', 'utf8', function(error, data) {
-        res.send(ejs.render(data, {}));
-    });    
-});
 
 router.post('/cloud/upload', function(req, res) {
     logger.info('Path change : /drone/cloud/upload');
@@ -225,21 +192,23 @@ router.get('/view', function(req, res) {
     logger.info('Path change : /droneAddModify');
     var type = typeof req.query.dev_key === "undefined" ? 'add' : 'modify';
     logger.info('type', type)
-    fs.readFile('html/drone_add_modify.html', 'utf8', function(error, data) {
+    // fs.readFile('html/drone_add_modify.html', 'utf8', function(error, data) {
         if (type === 'modify') {
             var query = util.format("SELECT * FROM TB_DRON_SETUP_INFO WHERE DEV_KEY = '%s'", req.query.dev_key);
             logger.info('Query: ', query);
             dbConn.query(query, function (error, results) {
-                res.send(ejs.render(data, {
+                // res.send(ejs.render(data, {
+                res.send({
                     data: results[0], type: type
-                }));
+                });
             });
         } else {// add
-            res.send(ejs.render(data, {
+            // res.send(ejs.render(data, {
+            res.send({
                 data: { DEV_KEY: '' }, type: type
-            }));
+            });
         }
-    });    
+    // });    
 });
 
 router.post('/add', function(req, res) {
@@ -392,25 +361,21 @@ router.post('/droneDelete', function(req, res) {
 
 router.get('/control', function(req, res) {    
     logger.info('Path change : /drone/control');
-    var JWT = decodeJWT(req, res, function(result, token) {
-        if (result) {
-            var where = '';
-            if (req.body.userlv == '2')
-                where = util.format(" AND a.CODE_02 = '%s' ", req.body.code_02); 
-        
-            var query = util.format("SELECT a.CTL_NM, a.DEFAULT_DEVICE, b.DEV_KEY, a.CODE_01, b.CODE_02 " +
-            "FROM " +
-            "TB_CONTROL a LEFT JOIN TB_DEFAULT_CONNECT_INFO b " +
-            "ON a.CODE_01 = b.CODE_01 " +
-            "AND a.CODE_02 = b.CODE_02 " +
-            "AND a.CODE_03 = b.CODE_03 " +
-            "AND a.DEFAULT_DEVICE = b.DEV_TYPE " +
-            "WHERE a.CODE_03 = '%s'" + where, token.code_03);
-            logger.info('query', query);
-            dbConn.query(query, function (error, result) {
-                res.send(result);
-            });
-        }
+    var where = '';
+    if (req.body.userlv == '2')
+        where = util.format(" AND a.CODE_02 = '%s' ", req.body.code_02); 
+
+    var query = util.format("SELECT a.CTL_NM, a.DEFAULT_DEVICE, b.DEV_KEY, a.CODE_01, b.CODE_02 " +
+    "FROM " +
+    "TB_CONTROL a LEFT JOIN TB_DEFAULT_CONNECT_INFO b " +
+    "ON a.CODE_01 = b.CODE_01 " +
+    "AND a.CODE_02 = b.CODE_02 " +
+    "AND a.CODE_03 = b.CODE_03 " +
+    "AND a.DEFAULT_DEVICE = b.DEV_TYPE " +
+    "WHERE a.CODE_03 = '%s'" + where, req.session.code_03);
+    logger.info('query', query);
+    dbConn.query(query, function (error, result) {
+        res.send(result);
     });
 });
 

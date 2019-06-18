@@ -1,5 +1,5 @@
 var Struct = require('struct');
-var utilLib = require('../public/javascripts/utilLib');
+var utilLib = require('./utilLib');
 
 module.exports = Header;
 

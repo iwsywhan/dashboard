@@ -3,7 +3,7 @@
     "SecureOnOff" : false,
     "HpptRedirect" : false,
     "WebServerIP" : "211.174.49.170",
-    "WebPort" : 8080,
+    "WebPort" : 7002,
     "SecureWebPort" : 443,
     "StreamConnect" : true,
     "server_access_key" : "AIzaSyAURTN3yKn0U8s6Lbl8rKylrhC4INCi6FA",

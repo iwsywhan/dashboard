@@ -3,21 +3,8 @@
  */
 
 var util = require('util');
-var winston = require('winston');
-var moment = require('moment');
+const logger = require('./libs/logger')
 
-var logger = new (winston.Logger)({ 
-	transports: [
-     new winston.transports.DailyRotateFile({
-         name: 'dailyInfoLog',
-         level:'info',
-         filename: '/LCS/daily-',
-         timestamp: function(){return moment().format("YYYY-MM-DD HH:mm:ss.SSS");},
-         datePattern : 'yyyyMMdd.log',
-         json:false
-       })
-   ]
-});
 /*
 	함수 설명 : 서비스 현황에서 PUSH 메세지를 전송한 내역을 볼 수 있는 함수
 			단, 하나의 단말에 대해서는 최종 결과만 보여준다.  

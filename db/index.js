@@ -1,7 +1,8 @@
 var mysql = require('mysql');
 var logger = require('../libs/logger');
 
-var DB_HOST = '127.0.0.1';
+// var DB_HOST = '127.0.0.1';
+var DB_HOST = '192.168.0.120';
 var db_config = {
     host: DB_HOST,
     port: 3306,

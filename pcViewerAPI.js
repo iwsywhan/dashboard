@@ -1,20 +1,5 @@
 ﻿var util = require('util');
-var winston = require('winston');
-var moment = require('moment');
-
-var LOGGER_FOLDER_PATH = '/LCS/APP/LOG/WEBAPP/daily-w';
-var logger = new (winston.Logger)({
-    transports: [
-        new winston.transports.DailyRotateFile({
-            name: 'dailyInfoLog',
-            level: 'info',
-            filename: LOGGER_FOLDER_PATH,
-            timestamp: function () { return moment().format("YYYY-MM-DD HH:mm:ss.SSS"); },
-            datePattern : 'yyyyMMdd.log',
-            json: false
-        })
-    ]
-});
+const logger = require('./libs/logger')
 
 exports.GetPCViewerList = function (dbConn, devKey, devType, callback) {
 	

@@ -3,45 +3,33 @@
  */
 var util = require('util');
 var fs = require('fs');
-var ejs = require('ejs');
+// var ejs = require('ejs');
 var http = require('http');
 var https = require('https');
 var express = require('express');
 var path = require('path');
-var mysql = require('mysql');
-var struct = require('./coupledMessage.js');
-var Map = require("collections/map");
 var url = require('url');
 var querystring = require('querystring');
-var net = require('net');
-var utilLib = require('./public/javascripts/utilLib.js');
+var utilLib = require('./libs/utilLib.js');
 var pwValidator = require('./libs/passwordValidate');
 
-// var mime = require('mime');
 var bodyParser = require('body-parser');
-var cookieParser = require('cookie-parser');
-var session = require('express-session');
-var builder = require('xmlbuilder');
-var parseString = require('xml2js');
-var nodeExcel = require('excel-export');
-var formidable = require('formidable');
-var gcm = require('node-gcm');
+// var cookieParser = require('cookie-parser');
+// var session = require('express-session');
 var pushServiceAPI = require('./pushServiceAPI.js');
 var lcsServiceAPI = require('./lcsServiceAPI.js');
 var pcViewerAPI = require('./pcViewerAPI.js');
-var rtmpAPI = require('./rtmpAPI.js');
+// var rtmpAPI = require('./rtmpAPI.js');
 var channelAPI = require('./channelServiceAPI.js');
-var winston = require('winston');
-var moment = require('moment');
-var crypto = require('crypto');
+// var crypto = require('crypto');
 var morgan = require('morgan');
-var cors = require('cors');
+// var cors = require('cors');
 var aes256cbc = require('./aes256cbc.js');
 var logger = require('./libs/logger');
 var DroneResult = require('./libs/DroneResult');
 var CloudLib = require('./libs/CloudLib');
 var dbConn = require('./db');
-var helmet = require('helmet');
+
 var indexRouter = require('./routes/index');
 var loginRouter = require('./routes/login');
 var serviceRouter = require('./routes/service');
@@ -58,17 +46,7 @@ var cameraRouter = require('./routes/camera')
 var chNoticeRouter = require('./routes/chNotice');
 
 var socketClient = require('./socketClient');
-var decodeJWT = require('./libs/decodeJWT');
-
-var i18next = require('i18next');
-var FilesystemBackend = require('i18next-node-fs-backend');
-var i18nextMiddleware = require('i18next-express-middleware');
-
-var java = require('java');
-java.classpath.push("./libs/security/security.jar");
-var security = java.import("com.iwill.Swan");
-security.initSync("./libs/security/VulnerCheckList.xml");
-
+var { auth } = require('./libs/auth');
 
 var droneResult = new DroneResult();
 var cloudLib = new CloudLib();
@@ -83,27 +61,6 @@ var menuConf = JSON.parse(fs.readFileSync('./config/menu.json'));
 
 var httpsWebServerPort = serverConf.SecureWebPort;
 var httpWebServerPort = serverConf.WebPort;
-
-var DB_HOST = '127.0.0.1';
-var TOSS_HOST = '172.22.15.78';
-var TOSS_PORT = 10200;
-
-var regQueue = [];
-
-megaLoop();
-
-function megaLoop() {
-    dbConn.query('SELECT C_KEY, C_VALUE, C_NAME FROM TB_COMMON', function(err, rows) {
-        if (err) {
-            logger.error('DB Error: ', err);
-            handleDisconnect();
-        } else {
-            logger.info('dummy query success');
-        }
-    });
-
-    setTimeout(megaLoop, 10 * 60 * 1000);
-}
 
 var g_lcsAccUrl, g_lcsAddrIP, g_lcsAccVodPort, g_lcsSVodPort;
 var query = "SELECT C_VALUE FROM TB_COMMON WHERE C_NAME = 'DOMAIN' or C_NAME = 'IPADDR' or C_NAME='VOD_PORT' or C_NAME='SVOD_PORT'";
@@ -122,7 +79,6 @@ dbConn.query(query, function(error, results) {
 });
 
 var app = express();
-// var router = express.Router();
 //---------------------------------------------------------------------------------------------
 // Web Server on
 //---------------------------------------------------------------------------------------------
@@ -164,15 +120,15 @@ if (serverConf.SecureOnOff) {     // https
         honorCipherOrder: true
     };
     server = https.createServer(options, app).listen(httpsWebServerPort, function() {
-        logger.info("Https server listening on port " + httpsWebServerPort);
+        console.log("Https server listening on port " + httpsWebServerPort);
     });
 } else {// http
     server = http.createServer(app).listen(httpWebServerPort, function(){
-        logger.info("Http server listening on port " + httpWebServerPort);
+        console.log("Http server listening on port " + httpWebServerPort);
     });
 }
 
-var _io = require('./sockets').initialize(server);
+// var _io = require('./sockets').initialize(server);
 
 logger.stream = {
     write: function(message, encoding) {
@@ -184,9 +140,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(morgan('combined', {
     'stream': logger.stream
 }));
-app.use(helmet({
-    noSniff: false
-}));
+
+// app.use(helmet({
+//     noSniff: false
+// }));
 
 if (app.get('env') === 'development') {
     app.use(function(err, req, res, next) {
@@ -208,18 +165,16 @@ app.use(function(err, req, res, next) {
     });
 });
 
-app.use(cookieParser());
+// app.use(cookieParser());
 app.use(bodyParser.json());
-app.use(session({
-    secret: 'secret key',
-    key: 'ltelcs_b2b_widget',
-    cookie: {
-        secure: serverConf.SecureOnOff,
-        httpOnly: true //,
-        // path: '/admin'
-        // maxAge: 1000 * 60 * 60 * 24 * 31
-    }
-}));
+// app.use(session({
+//     secret: 'secret key',
+//     key: 'ltelcs_b2b_widget',
+//     cookie: {
+//         secure: serverConf.SecureOnOff,
+//         httpOnly: true
+//     }
+// }));
 app.use(bodyParser.urlencoded({
     extended: false
 }));
@@ -238,79 +193,6 @@ if (serverConf.HpptRedirect) {
         next();
     });
 }
-
-i18next
-  .use(FilesystemBackend)
-  .use(i18nextMiddleware.LanguageDetector)
-  .init({
-    backend: {
-        loadPath: __dirname + '/public/locales/{{lng}}/{{ns}}.json',
-        addPath: __dirname + '/public/locales/{{lng}}/{{ns}}.missing.json'
-    },
-    fallbackLng: 'ko',
-    preload: ['ko', 'en', 'zh', 'vi'],
-    saveMissing: true,
-    detection: {
-        order: ['cookie', 'navigator'],
-        lookupCookie: 'i18next',
-    }
-});
-app.use(i18nextMiddleware.handle(i18next));
-
-app.all('*', function(req, res, next) {
-
-    var url_parts;
-    if (req.method == 'POST') {
-        url_parts = querystring.stringify(req.body);
-        var url_parts_nm = url.parse(req.url, true).pathname;
-    } else if (req.method == 'GET') {
-        url_parts = url.parse(req.url, true);
-        var url_parts_nm = url_parts.pathname;
-        url_parts = url_parts.search;
-        var sub = url_parts.substr(1, 1);
-    }
-    logger.info("url_parts : " + url_parts);
-    logger.info("url_parts_nm : " + url_parts_nm);
-    if (typeof url_parts == "undefined" || url_parts.length == 0 || sub == "_" || url_parts_nm == "/alert/") {
-        next();
-    } else {
-        var params = url_parts.substring(url_parts.indexOf('?') + 1, url_parts.length);
-        params = params.split("&");
-        var params = url_parts.split("&");
-        logger.info("params : " + params);
- 
-        var key, value;
-        var weakNum = 0;
-        var returnVal;
-
-        for (var i = 0; i < params.length; i++) {
-            key = params[i].split("=")[0];
-            value = params[i].split("=")[1];
-            logger.info("params-key : ", key, "value : ",value)
-
-            if (key.indexOf('fileName') > -1 || key.indexOf('img') > -1) {
-                returnVal = security.checkSync(value, 0, "common", "filedown");
-            } else {
-                returnVal = security.checkSync(value, 0, "forEditor", "xss|sqlinjection");
-            }
- 
-            if (returnVal == "true") {
-                logger.info('check url : ' + url_parts_nm + ' check key : ' + key);
-                logger.info('weakWord value : ' + decodeURIComponent(value));
-                var weakWord = decodeURIComponent(value);
-                weakNum = 1;
-            }
-        }
-        if (weakNum == 0) {
-            next();
-        } else {
-            var msg = "금칙어 ["+weakWord+"]가 검출되어 로그아웃 되었습니다."
-            logger.info('Security vulnerability ID : ', req.session.userid, msg)
-            _io.sockets.emit('logout',req.session.userid,2,msg);
-            // res.redirect("/logout");
-        }
-    }
- });
 
 // dron API router
 app.use('/utmapi', function (req, res, next) {
@@ -339,9 +221,8 @@ app.use(/\/drone|\/cloud\/camera/, function (req, res, next) {
     }
 });
 
+app.use(auth);
 
-app.use('/', indexRouter);
-app.use('/login', loginRouter);
 app.use('/service', serviceRouter);
 app.use('/pw', passwordRouter);
 app.use('/manage', manageRouter);
@@ -361,29 +242,9 @@ app.use('/livecam', require('./routes/livecam'));
 app.use('/utmapi', cameraRouter);
 
 
-
-// app.get('/getCountServcing', CheckAuth, function(request, response) {
-//     logger.info('Path change : /getCountServcing');
-
-//     var query = 'SELECT count(P_CUST_CTN) as COUNT FROM TB_STB_SERVICE WHERE STATUS = \'2\'';
-
-//     dbConn.query(query, function(error, results) {
-
-//         logger.info('Query:', query);
-
-//         if (error) {
-//             logger.error('DB Error:', error);
-//         } else {
-//             response.send(results[0]);
-//         }
-//     });
-// });
-
-app.get('/serviceStatusView/:id', CheckAuth, function(request, response) {
+app.get('/serviceStatusView/:id', function(request, response) {
+    
     logger.info('Path change : /serviceStatusView/', request.param('id'));
-
-    fs.readFile('html/service_status_view.html', 'utf-8', function(error, data) {
-
         var mVoIP;
         var query = util.format('SELECT SV_OP_SV_V FROM TB_CUSTOMER WHERE CUSTOMER_CODE = \'%s\'', request.session.code_03);
 
@@ -396,7 +257,8 @@ app.get('/serviceStatusView/:id', CheckAuth, function(request, response) {
                 mVoIP = results[0].SV_OP_SV_V;
             }
 
-            response.send(ejs.render(data, {
+            // response.send(ejs.render(data, {
+            response.send({
                 data: {
                     'userid': request.session.userid,
                     'userlevel': request.session.userlv,
@@ -405,33 +267,15 @@ app.get('/serviceStatusView/:id', CheckAuth, function(request, response) {
                     'code03': request.session.code_03,
                     'mVoIP': mVoIP
                 }
-            }));
+            });
         });
-    });
+    // });
 });
-
-// app.get('/refreshService/:id', function(request, response) {
-
-//     logger.info('Path change : refreshService/', request.url);
-
-//     var urlquery = querystring.parse(url.parse(request.url).query);
-//     query = util.format('select * from TB_TERMINAL_IMAGE_TRANS where CUST_CTN=\'%s\' and CTN_DEVICE=\'%s\' and INSERT_DATE=\'%s\' ', request.param('id'), urlquery.device, urlquery.insertdate);
-//     dbConn.query(query, function(error, results) {
-
-//         logger.info('Query:', query);
-//         if (error) {
-//             logger.error('DB Error: ', error);
-//         } else {
-//             response.send(results[0]);
-//         }
-//     });
-
-// });
 
 app.get('/serviceMultiVoice/:ctn', CheckAuth, function(request, response) {
     logger.info('Path change : /serviceMultiVoice');
 
-    fs.readFile('html/service_multi_voice.html', 'utf8', function(error, data) {
+    // fs.readFile('html/service_multi_voice.html', 'utf8', function(error, data) {
         var mVoIP;
         var query = util.format('SELECT SV_OP_SV_V FROM TB_CUSTOMER WHERE CUSTOMER_CODE = \'%s\'', request.session.code_03);
         logger.info('Query:', query);
@@ -444,13 +288,14 @@ app.get('/serviceMultiVoice/:ctn', CheckAuth, function(request, response) {
                 mVoIP = results[0].SV_OP_SV_V;
             }
 
-            response.send(ejs.render(data, {
+            // response.send(ejs.render(data, {
+            response.send({
                 data: {
                     'mVoIP': mVoIP
                 }
-            }));
+            });
         });
-    });
+    // });
 });
 
 app.get('/serviceDeleteMultiVoice', CheckAuth, function(request, response) {
@@ -652,7 +497,6 @@ app.get('/MinDept1', function(request, response) {
 
 app.get('/optionDept1', function(request, response) {
     logger.info('Path change : /optionDept1');
-    //var query = "SELECT GUBUN,CODE,CODE_NM FROM TB_DEPT_DEPTH WHERE GUBUN = '1'";
     var query = util.format("SELECT GUBUN,CODE,CODE_NM FROM TB_DEPT_DEPTH WHERE GUBUN = '1' AND CODE_03 = '%s' order by CODE", request.session.code_03);
     dbConn.query(query, function(error, results) {
         logger.info('Query:', query);
@@ -934,11 +778,6 @@ app.get('/searchSTB', function(request, response) {
 
 app.get('/voiceCallService', function(request, response) {
     logger.info('Path change : /voiceCallService');
-    /*
-        var query = util.format('select IFNULL(NM,\'\') as NM, IFNULL(DEPT_NM,\'\') as DEPT_NM, IFNULL(TEAM_NM,\'\') as TEAM_NM,' +
-            'IFNULL(CALL_TIME_ST,\'\') as CALL_TIME_ST, IFNULL(CALL_TIME_ED, \'\') as CALL_TIME_ED, CTN, STATUS, INSERT_DATE' +
-            ' from TB_VOICE_CALL_SERVICE where P_CUST_CTN = \'%s\' and P_INSERT_DATE = \'%s\'', request.param('CUSTCNT'), request.param('INSERTDATE'));
-    */
     var query = util.format('select IFNULL(b.NM,\'\') as NM ,IFNULL(b.DEPT_NM,\'\') as DEPT_NM ,IFNULL(b.CALL_TIME_ST,\'\') as CALL_TIME_ST' +
         ',IFNULL(b.CALL_TIME_ED,\'\') as CALL_TIME_ED, b.CTN,b.STATUS, b.INSERT_DATE' +
         ' from (select P_CUST_CTN ,P_INSERT_DATE ,CTN ,max(INSERT_DATE) as INSERT_DATE from TB_VOICE_CALL_SERVICE' +
@@ -1073,33 +912,6 @@ app.get('/fullstbService', function(request, response) {
     });
 });
 
-//mobile, pc 통합 (서비스 현황)
-// app.get('/viewService', function(request, response) {
-
-//     logger.info('Path change : /viewService');
-
-//     var query = util.format('select b.DEV_NM,b.DEV_DEPT_NM,b.SVC_TIME_ST,b.SVC_TIME_ED,b.MODEL,b.VERSION,IFNULL(b.SVC_IP, \'\') as SVC_IP,IFNULL(b.DEV_KEY,\'\') as DEV_KEY,b.STATUS,b.VSTATUS,b.INSERT_DATE' +
-//         ' from ( select P_CUST_CTN, P_INSERT_DATE, DEV_KEY, max(INSERT_DATE) as INSERT_DATE from TB_VIEW_SERVICE' +
-//         ' where P_CUST_CTN = \'%s\' and P_INSERT_DATE = \'%s\' group by P_CUST_CTN, P_INSERT_DATE, DEV_KEY) a' +
-//         ' left join TB_VIEW_SERVICE b' +
-//         ' on a.INSERT_DATE = b.INSERT_DATE and a.P_CUST_CTN = b.P_CUST_CTN and a.P_INSERT_DATE = b.P_INSERT_DATE and a.DEV_KEY = b.DEV_KEY' +
-//         ' WHERE DEV_TYPE = \'%s\'' +
-//         ' order by b.INSERT_DATE', request.param('CUSTCNT'), request.param('INSERTDATE'), request.param('view_type'));
-
-
-//     dbConn.query(query, function(error, results) {
-
-//         logger.info('Query:', query);
-
-//         if (error) {
-//             logger.error('DB Error:', error);
-//         } else {
-            
-//             response.send(results);
-//         }
-//     });
-// });
-
 app.get('/viewServicing', function(request, response) {
 
     logger.info('Path change : /viewServicing');
@@ -1136,11 +948,6 @@ app.get('/viewServicing', function(request, response) {
 app.get('/fullViewService', function(request, response) {
     // 파일을 읽습니다.
     logger.info('Path change : /fullViewService');
-
-    //  var query = util.format('SELECT a.*, b.* FROM TB_VIEW_SERVICE a LEFT JOIN (SELECT REASON, DEFECT_CODE  FROM TB_DEFECT_CODE) b ' +
-    //             'ON a.DEFECT_CODE = b.DEFECT_CODE WHERE DEV_TYPE = \'%s\' and P_CUST_CTN = \'%s\' and P_INSERT_DATE = \'%s\' and SVC_TYPE <> \'10\' order by INSERT_DATE'
-	// 			, request.param('view_type'), request.param('CUSTCNT'), request.param('INSERTDATE'));
-
     var q = util.format("SELECT LOCALE from TB_ADMIN WHERE ADMIN_ID = '%s'", request.session.userid);
     dbConn.query(q, function(error, results1) {
         logger.info('Query:', query);
@@ -1168,20 +975,6 @@ app.get('/fullViewService', function(request, response) {
             });        
         }
     });
-            
-
-    // dbConn.query(query, function(error, results) {
-
-    //     logger.info('Query:', query);
-
-    //     if (error) {
-    //         logger.error('DB Error:', error);
-    //     } else {
-            
-    //         response.send(results);
-    //     }
-
-    // });
 });
 
 app.post('/pushService', function(request, response) {
@@ -1378,45 +1171,27 @@ app.get('/stbStatus', function(request, response) {
     });
 });
 
-app.get('/commonList', CheckAuth, function(request, response) {
-
-    logger.info('Path change : /commonList');
-
-    var query = "select * from TB_COMMON where C_KEY = '12'";
-
-    dbConn.query(query, function(error, results) {
-        logger.info('Query:', query);
-
-        if (error) {
-            logger.error('DB Error:', error);
-        } else {
-            
-            response.send(results[0]);
-        }
-
-    });
-
-});
 
 //----------------------------------- 이력조회 -------------------------------------
 
 app.get('/service/report', CheckAuthCommon, function(request, response) {
     logger.info('Path change : /service/report');
 
-    fs.readFile('html/report.html', 'utf8', function(error, data) {
+    // fs.readFile('html/report.html', 'utf8', function(error, data) {
 
         if (error) {
             logger.error('Error:', error);
         } else {
-            response.send(ejs.render(data, {
+            // response.send(ejs.render(data, {
+            response.send({
                 data: {
                     'session': request.session.userid,
                     'session_pw': request.session.userpw,
                     'drone': request.session.drone
                 }
-            }));
+            });
         }
-    });
+    // });
 });
 
 app.get('/reportStatus', CheckAuthCommon, function(request, response) {
@@ -1495,25 +1270,21 @@ app.get('/reportGetData', CheckAuth, function(request, response) {
 
 app.get('/reportStatusView/', CheckAuthCommon, function(request, response) {
 
-    fs.readFile('html/report_view.html', 'utf8', function(error, data) {
+    // fs.readFile('html/report_view.html', 'utf8', function(error, data) {
 
         if (error) {
             logger.error('Error:', error);
         } else {
-            // response.writeHead(200, {
-            //     'Content-Type': 'text/html; charset=UTF-8'
-            // });
-
-            response.send(ejs.render(data, {
+            // response.send(ejs.render(data, {
+            response.send({
                 data: {
                     'session': request.session.userid,
                     'session_pw': request.session.userpw,
                     'drone': request.session.drone
                 }
-            }));            
-            // response.end(data);
+            });            
         }
-    });
+    // });
 });
 
 app.get('/reportStatus/:id', function(request, response) {
@@ -1708,6 +1479,67 @@ app.get('/reportCTN', CheckAuth, function(request, response) {
         });
     });
 });
+
+app.get('/fileDelete', function(request, response) {
+
+    var file_nm = request.param('file_nm');
+    var cust_ctn = request.param('cust_ctn');
+    var insert_date = request.param('insert_date');
+
+    var query = 'SELECT C_VALUE FROM TB_COMMON WHERE C_NAME = \'UP DIR\''
+
+    dbConn.query(query, function(error, results) {
+
+        logger.info('Query:', query);
+        if (error) {
+            logger.error('DB Error:', error);
+        } else {
+            
+
+            if (typeof results[0] != 'undefined') {
+
+                var dir = results[0].C_VALUE;
+                var file = dir + "/" + file_nm;
+
+                var exec = require('child_process').exec,
+                    child;
+
+                child = exec('unlink ' + file,
+                    function(error, stdout, stderr) {
+                        if (error !== null) {
+                            console.log('exec error: ' + error);
+                            response.send({
+                                "result": "fail",
+                                "reason": "file delete error"
+                            });
+                        } else {
+                            logger.info('fiie delete request id : ', request.session.userid, ' ', file_nm);
+                            var query3 = util.format('DELETE FROM TB_LOCATION_HISTORY WHERE P_CUST_CTN = \'%s\' and P_INSERT_DATE = \'%s\'', cust_ctn, insert_date);
+                            dbConn.query(query3, function(error, result) {
+                                logger.info('Query:', query3)
+                            });
+
+                            var query2 = 'UPDATE TB_TERMINAL_IMAGE_TRANS SET UPLOAD_FILE_NM = "", UPLOAD_FILE_SZ = 0 WHERE INSERT_DATE = \'' + insert_date + '\' and CUST_CTN = \'' + cust_ctn + '\' ';
+
+                            dbConn.query(query2, function(error, result) {
+                                logger.info('UPDATE TB_TERMINAL_IMAGE_TRANS Query:', query2);
+                            });
+
+                            response.send({
+                                "result": "success",
+                                "file_nm": file_nm
+                            });
+                        }
+                    });
+
+            }
+
+        }
+
+    });
+
+});
+
 
 
 app.get('/pushServiceReport', CheckAuthControl, function(request, response) {
@@ -2114,6 +1946,96 @@ app.post('/locAdminMappingModify', function(request, response) {
     });
 });
 
+app.get('/lctGoogle', function(request, response) {
+    logger.info('Path change : /lctGoogle : ');
+
+    //var g = request.param('g');
+    //var f_date = request.param('f_date');
+    //var t_date = request.param('t_date');
+    var ctn = request.param('ctn');
+    var date = request.param('date');
+    var userid = request.session.userid;
+
+    var query;
+
+
+    logger.info('map : ', ctn);
+    var queryS = "    ";
+    if (ctn != undefined && ctn != 'undefined' && (ctn == "google" || ctn == "vworld" || ctn == "lguplus")) { //지도뷰어(큰창)
+
+        query = util.format('SELECT CTN_DEVICE, CUST_CTN, LIST.INSERT_DATE, HIS.*' +
+            ' FROM TB_LOCATION_HISTORY HIS,' +
+            ' (SELECT A.CTN_DEVICE, A.CUST_CTN, A.INSERT_DATE' +
+            ' FROM TB_TERMINAL_IMAGE_TRANS A, (' +
+            ' SELECT P_CUST_CTN,P_INSERT_DATE' +
+            ' FROM (' +
+            ' SELECT P_CUST_CTN,P_INSERT_DATE, INSERT_DATE, STATUS,' +
+            ' (CASE @vP_CUST_CTN WHEN A.P_CUST_CTN THEN @rownum:=@rownum+1 ELSE @rownum:=1 END) rank,' +
+            ' (@vP_CUST_CTN:=A.P_CUST_CTN) vP_CUST_CTN' +
+            ' from TB_LOCATION_ADMIN_MAPPING A, (SELECT @vP_CUST_CTN:=\'\', @rownum:=0 FROM DUAL) B' +
+            ' where A.ADMIN_ID = \'%s\'' +
+            ' order by P_CUST_CTN, INSERT_DATE desc' +
+            ' ) LIST' +
+            ' WHERE RANK = 1 AND STATUS < \'3\'' +
+            ' ) B' +
+            ' WHERE A.STATUS < \'3\' AND A.CUST_CTN = B.P_CUST_CTN AND A.INSERT_DATE = B.P_INSERT_DATE' +
+            ' ) LIST' +
+            ' WHERE HIS.P_CUST_CTN = LIST.CUST_CTN AND HIS.P_INSERT_DATE = LIST.INSERT_DATE and HIS.P_CUST_CTN > \'0\'', userid);
+
+        /*
+        queryS += "  and concat(P_CUST_CTN,P_INSERT_DATE) in ( ";
+        queryS += "  select concat(CUST_CTN,INSERT_DATE) from ( ";
+        queryS += " 		 SELECT   ";
+        queryS += " 			 a.CUST_CTN ,   a.INSERT_DATE ,   ";
+        queryS += " 			(SELECT status  FROM TB_LOCATION_ADMIN_MAPPING i  WHERE i.P_CUST_CTN=a.CUST_CTN  AND i.P_INSERT_DATE=a.INSERT_DATE  AND i.ADMIN_ID = '"+userid+"' ORDER BY i.INSERT_DATE DESC limit 0, 1  ) as mapstatus ";
+        queryS += " 		 FROM TB_TERMINAL_IMAGE_TRANS a  ";
+        queryS += " 		 WHERE status < 3  ";
+        queryS += " 		 ORDER BY INSERT_DATE desc ";
+        queryS += "  ) p where mapstatus < 3  ) ";
+        */
+    } else if (ctn != undefined && ctn != 'undefined') { // 작은창 0000`20160000
+        var ctnVarList = ctn.split(","); //선택체크박스
+        var dateVarList = date.split(","); //선택체크박스
+
+        query = util.format('SELECT HIS.*, CTN_DEVICE FROM TB_LOCATION_HISTORY HIS LEFT JOIN TB_TERMINAL_IMAGE_TRANS TER' +
+            ' ON HIS.P_CUST_CTN = TER.CUST_CTN AND HIS.P_INSERT_DATE = TER.INSERT_DATE' +
+            ' WHERE HIS.P_CUST_CTN = \'%s\' AND HIS.P_INSERT_DATE = \'%s\' ORDER BY INSERT_DATE DESC LIMIT 0, 50', ctnVarList[0], dateVarList[0]);
+        /*
+		for(var i=0 ; i< ctnVarList.length; i++ ){
+			if( i > 0) queryS += " or ";
+			queryS += " ( P_CUST_CTN='"+ctnVarList[i]+"' and P_INSERT_DATE='"+dateVarList[i] +"' ) ";
+		}
+		queryS = " AND ("+queryS+")";
+		*/
+    } else { //값이 없을때
+        //queryS += " AND P_CUST_CTN ='xxxx' and P_INSERT_DATE='xxxx'  ";
+        query = util.format('SELECT HIS.*, CTN_DEVICE FROM TB_LOCATION_HISTORY HIS LEFT JOIN TB_TERMINAL_IMAGE_TRANS TER' +
+            ' ON HIS.P_CUST_CTN = TER.CUST_CTN AND HIS.P_INSERT_DATE = TER.INSERT_DATE' +
+            ' WHERE HIS.P_CUST_CTN = \'%s\' AND HIS.P_INSERT_DATE = \'%s\'', '', '');
+    }
+
+    /*
+    var query = "";
+
+	    query += " SELECT  ";
+		query += " P.*  ";
+		query += " ,(select CTN_DEVICE FROM TB_TERMINAL_IMAGE_TRANS i WHERE  P.P_CUST_CTN=i.CUST_CTN  AND P.P_INSERT_DATE=i.INSERT_DATE  limit 0, 1) as CTN_DEVICE FROM TB_LOCATION_HISTORY P WHERE LOCATION_X > 1  ";
+		query += queryS;
+		query += " ORDER BY P_CUST_CTN ,P_INSERT_DATE, INSERT_DATE    ";
+	*/
+
+    dbConn.query(query, function(error, results) {
+
+        logger.info('Query:', query);
+        if (error) {
+            logger.error('DB Error:', error);
+        } else {
+            //logger.info('DB success');
+            response.send(decryptArray(results));
+            //response.send(results);
+        }
+    });
+});
 
 
 app.get('/lastlocation', function(request, response) {
@@ -2136,6 +2058,44 @@ app.get('/lastlocation', function(request, response) {
     });
 });
 
+app.post('/revgeocoding', function(request, response) {
+    logger.info('Path change : /revgeocoding');
+
+    logger.info('HOST :', request.param('HOST'));
+    logger.info('PORT :', request.param('PORT'));
+    logger.info('PATH :', request.param('PATH'));
+    logger.info('LOCATION_X :', request.param('LOCATION_X'));
+    logger.info('LOCATION_Y :', request.param('LOCATION_Y'));
+
+    var bodyString = '{"cutflag":"0","coordtype":"1","startposition":"0","reqcount":"0","posx":"' + request.param('LOCATION_Y') + '","posy":"' + request.param('LOCATION_X') + '"}';
+    logger.info('revgeocoding body :', bodyString);
+    logger.info('revgeocoding length :', bodyString.length);
+
+    var headers = {
+        'Content-Type': 'application/json;charset=UTF-8',
+        'Content-Length': bodyString.length,
+        'apiVersion': '1.0.0',
+        'apiType': '01',
+        'devInfo': '03',
+        'authKey': 'beb570f165d54351b34729828ea704da',
+        'svcId': 'b506df83b8884710b233ce78b699245b'
+    };
+    // toss direct 접속
+    var options = {
+        host: request.param('HOST'),
+        port: request.param('PORT'),
+        path: request.param('PATH'),
+        method: 'POST',
+        headers: headers
+    };
+    var callback = function(response1) {
+        response1.on('data', function(data) {
+            logger.info('revgeocoding response: ', data.toString());
+            response.send(data);
+        });
+    }
+    https.request(options, callback).write(bodyString);
+});
 
 app.get('/requestAlarm', CheckAuth, function(request, response) {
     logger.info('Path change : /requestAlarm');
@@ -2202,10 +2162,6 @@ app.get('/fileDownload', function(request, response) {
     logger.info('Path change : /fileDownload');
 
     var filename = request.param('fileName');
-        //2019.02.13 디렉토리 접근 차단
-        // filename = filename.split("../").join("");
-        // filename = filename.split("/").join("");
-    
     var query = 'SELECT C_VALUE FROM TB_COMMON WHERE C_NAME = \'UP DIR\''
     dbConn.query(query, function(error, results) {
 
@@ -2219,7 +2175,6 @@ app.get('/fileDownload', function(request, response) {
 
                 var dir = results[0].C_VALUE;
                 var file = dir + "/" + filename;
-                //logger.info(file);
                 response.download(file);
             } else {
                 logger.error('cannot find download directory');
@@ -2233,114 +2188,40 @@ app.get('/loghistory', CheckAuthControl, function(request, response) {
 
     logger.info('Path change : /loghistory');
     var code3 = request.session.code_03;
-    fs.readFile('html/login_history.html', 'utf8', function(error, data) {
+    // fs.readFile('html/login_history.html', 'utf8', function(error, data) {
  
-        //var query = 'select * from TB_LOGIN_HISTORY';
         var query = util.format('SELECT a.* FROM TB_LOGIN_HISTORY a' +
             ' LEFT JOIN TB_ADMIN b on a.ADMIN_ID = b.ADMIN_ID' +
             ' WHERE b.CODE_03 = \'%s\'', code3);
  
         dbConn.query(query, function(error, results) {
             logger.info('Query:', query);
- 
-            response.send(ejs.render(data, {
+            // response.send(ejs.render(data, {
+            response.send({
                 data: results
-            }));
- 
+            });
         });
- 
-    });
+    // });
  });
-
-
-app.get('/streaming', CheckAuthControl, function(request, response) {
-
-    logger.info('Path change : /streaming');
-
-    fs.readFile('html/streaming.html', 'utf8', function(error, data) {
-
-        var query = 'select * from TB_VOD_LST';
-
-        dbConn.query(query, function(error, results) {
-            logger.info('Query:', query);
-
-            response.send(ejs.render(data, {
-                data: results
-            }));
-
-        });
-
-    });
-});
-
-app.get('/streamingPaging', function(request, response) {
-
-    logger.info('Path change : /streaming');
-
-    var start = request.param('start');
-    var pageSize = request.param('pageSize');
-    var f_date = request.param('f_date') + '000000';
-    var t_date = request.param('t_date') + '235959';
-
-    var query = 'select * ';
-    query += 'from TB_VOD_LST where INSERT_DATE > \'' + f_date + '\' and INSERT_DATE < \'' + t_date + '\' order by INSERT_DATE desc ';
-    query += 'limit ' + start + ',' + pageSize + '';
-
-    dbConn.query(query, function(error, results, fields) {
-        logger.info('Query: ', query);
-
-        if (error) {
-            logger.error('DB Error:', error);
-        } else {
-            response.send(results);
-        }
-
-    });
-});
-
-app.get('/streamingCount', function(request, response) {
-
-    var f_date = request.param('f_date') + '000000';
-    var t_date = request.param('t_date') + '235959';
-
-    var query = 'select count(*) as cnt from TB_VOD_LST ';
-    query += ' where INSERT_DATE > \'' + f_date + '\' and INSERT_DATE < \'' + t_date + '\'';
-
-    logger.info('Query: ', query);
-
-    dbConn.query(query, function(error, results) {
-
-        if (error) {
-            logger.error('DB Error:', error);
-        } else {
-            response.send(results[0]);
-        }
-
-    });
-
-});
 
 
 app.get('/loginList', CheckAuth, function(request, response) {
 
-    fs.readFile('login_history.html', function(error, data) {
+    // fs.readFile('login_history.html', function(error, data) {
 
         var custCTN = request.param('custCTN');
         var insertDate = [request.param('insertDate')];
-
         var query = 'select * from TB_LOGIN_HISTORY order by INSERT_DATE desc';
-
         dbConn.query(query, function(error, results) {
 
             logger.info('Query:', query);
             if (error) {
                 logger.error('DB Error:', error);
-            } else {
-                
+            } else {                
                 response.send(results);
             }
         });
-    });
+    // });
 });
 
 app.get('/appDownloadLink', function(request, response) {
@@ -3821,204 +3702,14 @@ app.get('/stats_service_defectcode_list', function(request, response) {
     });
 });
 
-app.get('/tab', CheckAuth, function(request, response) {
-    logger.info('Path change : /stats_err');
-    fs.readFile('tab.html', 'utf8', function(error, data) {
-        if (error) {
-            logger.error('Error:', error);
-        } else {
-            response.writeHead(200, {
-                'Content-Type': 'text/html; charset=UTF-8'
-            });
-            response.end(data);
-        }
-    });
-});
 
-//--------------------- SMS ----------------------------------
-app.get('/serviceMultiSms', CheckAuth, function(request, response) {
-    logger.info('Path change : /serviceMultiVoice');
-
-    fs.readFile('service_multi_sms.html', 'utf8', function(error, data) {
-
-        response.send(data);
-    });
-});
-
-app.get('/smsSend', CheckAuth, function(request, response) {
-    fs.readFile('service_multi_sms.html', 'utf8', function(error, data) {
-        response.send(data);
-    });
-});
-
-app.get('/adminList', function(request, response) {
-
-    var id = request.session.userid;
-
-    dbConn.query('select * from TB_ADMIN where ADMIN_ID = ?', [id], function(error, results) {
-
-        if (error) {
-            logger.error('DB Error: ', error);
-        } else {
-            
-            response.send(results);
-        }
-
-
-    });
-});
-
-app.all('/smsSend', function(request, response) {
-
-    var date = request.param('date');
-    var id = request.session.userid;
-    var nm = request.param('nm');
-    var orgaddr = request.param('orgaddr');
-    var destaddr = request.param('destaddr');
-    var text = request.param('text');
-    var sendflag = '1';
-    var custCTN = request.param('custCTN');
-    var insertDate = request.param('insertDate');
-
-    var query = 'INSERT INTO TB_SMS_SERVICE (P_CUST_CTN, P_INSERT_DATE, CREATE_DATE, ADMIN_ID, ADMIN_NM, ORGADDR, DESTADDR, TEXT, SENDFLAG,ENDCODE) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
-
-    dbConn.query(query, [custCTN, insertDate, date, id, nm, orgaddr, destaddr, text, sendflag, 0], function(error, result) {
-        if (error) {
-            logger.error('DB Error', error);
-        } else {
-            
-            response.send(orgaddr);
-        }
-    });
-});
-
-app.get('/sms', CheckAuth, function(request, response) {
-
-    fs.readFile('sms_list.html', 'utf8', function(error, data) {
-
-        if (error) {
-            logger.error('Error:', error);
-        } else {
-            response.writeHead(200, {
-                'Content-Type': 'text/html; charset=UTF-8'
-            });
-            response.end(data);
-        }
-    });
-});
-
-app.get('/smsList', function(request, response) {
-    logger.info('Path change : /smsList');
-
-    fs.readFile('sms_list.html', function(error, data) {
-
-        var custCTN = request.param('custCTN');
-        var insertDate = [request.param('insertDate')];
-
-        var query = 'select * from TB_SMS_SERVICE where P_CUST_CTN = \'' + custCTN + '\' and P_INSERT_DATE = \'' + insertDate + '\'';
-
-        dbConn.query(query, function(error, results) {
-
-            logger.info('Query:', query);
-            if (error) {
-                logger.error('DB Error:', error);
-            } else {
-                
-                response.send(results);
-            }
-        });
-    });
-});
-
-app.get('/smsRecord', CheckAuth, function(request, response) {
-
-    fs.readFile('sms_list.html', function(error, data) {
-
-        var todate = request.param('todate');
-        var fromdate = request.param('fromdate');
-
-        var query = 'select * from TB_SMS_SERVICE where CREATE_DATE >= \'' + todate + '\' and CREATE_DATE < \'' + fromdate + '\' order by CREATE_DATE';
-
-        dbConn.query(query, function(error, results) {
-
-            logger.info('Query:', query);
-            if (error) {
-                logger.error('DB Error:', error);
-            } else {
-                
-                response.send(results);
-            }
-        });
-    });
-});
-
-app.get('/smsDate', CheckAuth, function(request, response) {
-
-    fs.readFile('sms_list.html', function(error, data) {
-
-        var todate = request.param('todate');
-        var fromdate = request.param('fromdate');
-        var num = request.param('num');
-
-        if (num == null || num == '') {
-            var query = 'select * from TB_SMS_SERVICE where CREATE_DATE >= \'' + todate + '\' and CREATE_DATE < \'' + fromdate + '\' order by CREATE_DATE desc';
-        } else {
-            var query = 'select * from TB_SMS_SERVICE where CREATE_DATE >= \'' + todate + '\' and CREATE_DATE < \'' + fromdate + '\' and ORGADDR = \'' + num + '\' order by CREATE_DATE desc';
-
-        }
-
-        dbConn.query(query, function(error, results) {
-
-            logger.info('Query:', query);
-            if (error) {
-                logger.error('DB Error:', error);
-            } else {
-                
-                response.send(results);
-            }
-        });
-    });
-});
-
-app.get('/smsNum', CheckAuth, function(request, response) {
-    //console.log('/report', request.param('id'));
-    logger.info('/smsNum');
-
-    var num = request.param('num');
-
-    fs.readFile('report.html', function(error, data) {
-
-        var query = 'select * from TB_SMS_SERVICE where ORGADDR = \'' + num + '\' order by CREATE_DATE desc';
-
-        dbConn.query(query, function(error, results) {
-
-            logger.info('Query:', query);
-            if (error) {
-                logger.error('DB Error:', error);
-            } else {
-                
-                response.send(results);
-            }
-        });
-    });
-});
-
-
-app.get('/join', function(request, response) {
-    logger.info('Path change : /join');
-
-    fs.readFile('join.html', 'utf8', function(error, data) {
-        if (error) {
-            logger.error('Error:', error);
-        } else {
-            response.writeHead(200, {
-                'Content-Type': 'text/html; charset=UTF-8'
-            });
-            response.end(data);
-        }
-    });
-});
-
+/**
+ * 설정 시작
+ */
+/**
+ * 계정 관리
+ */
+/*
 app.post('/manageAdmin', CheckAuthAccount, function(request, response) {
     logger.info('Path change : /manageAdmin');
     fs.readFile('html/manage_admin.html', 'utf8', function(error, data) {
@@ -4347,8 +4038,6 @@ app.get('/adminsearchCount', function(request, response) {
         }
 
     });
-
-
 });
 
 app.get('/adminCount', function(request, response) {
@@ -4380,8 +4069,11 @@ app.get('/adminCount', function(request, response) {
     });
 
 });
-
-
+*/
+/**
+ * STB 관리
+ */
+/*
 app.get('/manageStb', CheckAuth, function(request, response) {
 
     fs.readFile('html/manage_stb.html', 'utf8', function(error, data) {
@@ -4675,7 +4367,12 @@ app.get('/stbCount', function(request, response) {
     });
 
 });
+*/
 
+/**
+ * 관제센터 관리
+ */
+/*
 app.get('/manageControl', CheckAuth, function(request, response) {
     logger.info('Path change : /manageControl');
     fs.readFile('html/manage_control.html', 'utf8', function(error, data) {
@@ -4756,11 +4453,6 @@ app.get('/controlAdd', CheckAuth, function(request, response) {
             } else {
                 mVoIP = results[0].SV_OP_SV_V;
             }
-            /*
-	        response.send(ejs.render(data, {
-	             data: {'session':session_id, 'session_lv': session_lv, 's_date': s_date, 'mVoIP' : mVoIP}
-	        }));
-	        */
             response.send(ejs.render(data, {
                 data: {
                     'code_03': request.session.code_03,
@@ -4796,16 +4488,6 @@ app.all('/controlAdd', CheckAuth, function(request, response) {
             response.send({
                 "ctl_nm": ctl_nm
             });
-            /*
-            var query2 = 'INSERT INTO TB_IMS_CALL_INFO (CALL_ID, CALL_PW, INSERT_DATE ) VALUES (? , ?, DATE_FORMAT(now(),"%Y%m%d%H%i%s") )';
-            //var query2 = 'UPDATE  TB_IMS_CALL_INFO SET CALL_ID = ?, CALL_PW = ?,  INSERT_DATE = DATE_FORMAT(now(),"%Y%m%d%H%i%s") WHERE CALL_ID = ?';
-
-            dbConn.query(query2, [ctl_tel_num, pw ], function (error, result) {
-            	//response.send(code);
-
-            	response.send(ctl_nm);
-            });
-            */
         }
     });
 });
@@ -5084,8 +4766,12 @@ app.all('/controlPaging', function(request, response) {
 
     });
 });
+*/
 
-
+/**
+ * 공통 관리
+ */
+/*
 app.get('/manageCommon', CheckAuthControl, function(request, response) {
     logger.info('Path change : /manageCommon');
 
@@ -5248,7 +4934,12 @@ app.all('/commonDelete', function(request, response) {
     });
 
 });
+*/
 
+/**
+ * 영상단말관리
+ */
+/*
 app.get('/manageUserList', CheckAuth, function(request, response) {
     logger.info('Path change : /manageUserList');
     fs.readFile('html/manage_user_list.html', 'utf8', function(error, data) {
@@ -5417,19 +5108,7 @@ app.all('/userlistDelete', function(request, response) {
         }
     });
 });
-/*
-app.post('/deleteControlSetup', function (request, response) {
 
-    dbConn.query('delete from TB_CONTROL_SETUP_INFO where CUST_CTN = ?', [ctn], function (error, result) {
-
-		if (error) {
-        	logger.error('DB Error:', error);
-		} else {
-	        //response.send(ctn);
-		}
-    });
-});
-*/
 app.get('/userlistsearchCount', function(request, response) {
 
     var lv = request.session.userlv;
@@ -5596,7 +5275,12 @@ app.get('/userlistCount', function(request, response) {
     });
 
 });
+*/
 
+/**
+ * 부서DEP관리
+ */
+/*
 app.get('/manageDept', CheckAuthControl, function(request, response) {
     logger.info('Path change : /manageDept');
     fs.readFile('html/manage_dept.html', 'utf8', function(error, data) {
@@ -5650,11 +5334,6 @@ app.get('/deptSearchCount', function(request, response) {
         query += 'and GUBUN="2" AND CODE = \'' + code2 + '\''
     }
 
-    /*if(code1 != 'all' && code2 != 'all') {
-    	query += 'where GUBUN="2" AND CODE = \''+code2+'\' ';
-    }else if(code1 != 'all' && code2 == 'all'){
-    	query += 'where GUBUN="2" AND CODE like \''+code1+'%\' ';
-    }*/
     query += 'and CODE_03 = \'' + request.session.code_03 + '\' ';
 
 
@@ -5752,6 +5431,7 @@ app.get('/manageDeptModify', CheckAuthControl, function(request, response) {
         });
     });
 });
+
 app.all('/manageDeptModify', CheckAuth, function(request, response) {
 
     var gubun = request.param('gubun');
@@ -5780,17 +5460,6 @@ app.all('/manageDeptAdd', CheckAuth, function(request, response) {
     var query = 'INSERT INTO TB_DEPT_DEPTH (GUBUN, CODE, CODE_NM, CODE_03) VALUES (?, ?, ?, ?)';
 
     dbConn.query(query, [gubun, code, code_nm, code3], function(error, result) {
-        /*
-        if(gubun == 1) {
-        	var query2 = 'INSERT INTO TB_DEPT_DEPTH (GUBUN, CODE, CODE_NM, CODE_03) VALUES ("2", ?, ?, ?)';
-
-        	dbConn.query(query2, [code, code_nm, code3], function (error, result) {
-        		response.send(code);
-        	});
-        }else {
-            response.send(code);
-        }
-        */
         response.send(code);
     });
 
@@ -5823,7 +5492,12 @@ app.all('/manageDeptDelete', function(request, response) {
         response.send(code);
     });
 });
+*/
 
+/**
+ * 공지사항 관리
+ */
+/*
 app.get('/notice', CheckAuthControl, function(request, response) {
     logger.info('/notice');
 
@@ -6025,16 +5699,6 @@ app.all('/controlDelete', function(request, response) {
     });
 });
 
-// app.all('/userlistDelete', function(request, response) {
-
-//     var nm = request.param('nm');
-//     dbConn.query('delete from TB_ORGANOGRAM where NM = ?', [nm], function() {
-
-//         response.send(nm);
-//     });
-// });
-
-
 app.get('/notice', CheckAuth, function(request, response) {
     logger.info('Path change : /notice');
 
@@ -6055,45 +5719,6 @@ app.get('/notice', CheckAuth, function(request, response) {
         });
     });
 });
-
-/* 중복
-app.get('/noticeAdd', CheckAuth, function(request, response) {
-    fs.readFile('html/notice_add.html', 'utf8', function(error, data) {
-        response.send(data);
-    });
-});
-
-
-app.all('/noticeAdd', function(request, response) {
-
-    var title = request.param('title');
-    var datepicker = request.param('datepicker');
-    var datepicker2 = request.param('datepicker2');
-    var date1 = datepicker.replace(/-/g, '');
-    var date2 = datepicker2.replace(/-/g, '');
-    var n_width = request.param('n_width');
-    var n_height = request.param('n_height');
-    var n_left = request.param('n_left');
-    var n_top = request.param('n_top');
-    var content = request.param('content');
-    var id = request.session.userid;
-    var status = '1';
-
-    var query = 'INSERT INTO TB_NOTICE_POPUP ' +
-        '(N_WIDTH, N_HEIGHT, N_LEFT, N_TOP, N_F_DATE, N_T_DATE, N_TITLE, N_CONTENT, N_STATUS, N_INSERTDATE, N_UPDATEDATE, N_ADMIN) ' +
-        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, DATE_FORMAT(now(),"%Y%m%d%H%i%s"), DATE_FORMAT(now(),"%Y%m%d%H%i%s"), ?)';
-
-    dbConn.query(query, [n_width, n_height, n_left, n_top, date1, date2, title, content, status, id], function(error, result) {
-        logger.info('Query: ', query);
-        if (error) {
-            logger.error('DB Error:', error);
-        } else {
-            
-            response.send(id);
-        }
-    });
-});
-*/
 
 app.get('/noticeDelete/:seq', CheckAuth, function(request, response) {
 
@@ -6197,22 +5822,6 @@ app.get('/noticeView/:seq', function(request, response) {
 
 
 app.get('/noticeView2', function(request, response) {
-
-    /*fs.readFile('html/notice_view2.html', 'utf8', function (error, data) {
-
-        //var query = 'select * from TB_ADMIN where ADMIN_ID =  \''+id+'\'';
-
-        var query = 'select * from TB_NOTICE_POPUP';
-
-        dbConn.query(query, function (error, result) {
-            response.send(ejs.render(data, {
-                data: result[0]
-
-            }));
-
-        });
-    });*/
-
     fs.readFile('html/notice_view2.html', 'utf8', function(error, data) {
         if (error) {
             logger.error('Error:', error);
@@ -6341,15 +5950,13 @@ app.get('/noticePaging', function(request, response) {
 
     });
 });
+*/
 
 
-app.get('/couple', function(request, response) {
-    fs.readFile('couple_test.html', 'utf8', function(error, data) {
-        response.send(data);
-    });
-});
-
-// defect code
+/**
+ * DEFECTCODE 조회
+ */
+/*
 app.all('/defectCode', function(request, response) {
 
     var q = util.format("SELECT LOCALE from TB_ADMIN WHERE ADMIN_ID = '%s'", request.session.userid);
@@ -6404,8 +6011,12 @@ app.post('/getDefectCode', function(request, response) {
         }
     });
 });
+*/
 
-//default device
+/**
+ * 기본연결 관리
+ */
+/*
 app.get('/connectmanage', CheckAuth, function(request, response) {
     logger.info('Path change : /connectmanage');
     var type = request.param('type');
@@ -6538,8 +6149,32 @@ app.all('/deviceDelete', function(request, response) {
     });
 
 });
+*/
 
-//----------------------------  PC Viewer ----------------------------------
+/**
+ * PC뷰어는 윈도우 어플리케이션으로 대체되므로 필요 없는 기능
+ */
+/*
+app.get('/pcviewer-check', CheckAuth, function(request, response) {
+
+var query = 'SELECT (SELECT C_VALUE FROM TB_COMMON WHERE C_NAME = \'IPADDR\')';
+    query += ' AS IPADDR, ';
+    query += '(SELECT C_VALUE FROM TB_COMMON WHERE C_NAME = \'RTSP_URL\')';
+    query += ' AS RTSP_URL, ';
+    query += '(SELECT C_VALUE FROM TB_COMMON WHERE C_NAME = \'CTL_PORT\')';
+    query += ' AS CTL_PORT ';
+
+    dbConn.query(query, function(error, results) {
+
+        logger.info('Query:', query);
+        if (error) {
+            logger.info('DB Error:', error);
+        } else {
+            response.send(results[0]);
+        }
+    });
+});
+
 app.get('/openVODViewer/:ctn', CheckAuthCommon, function (request, response) {
 
     logger.info('Path move : /openVODViewer');
@@ -6565,20 +6200,6 @@ app.get('/openPCViewerN', CheckAuthCommon, function (request, response) {
 
 
             var query;
-            // query =	util.format('SELECT SV_OP_SV_V, SV_OP_SV_AR, b.DEV_KEY, c.ADMIN_NM, c.ADMIN_DEPT_NM, c.ADMIN_ARANK, c.VIEWER_DEBUG ' +
-            //                     'FROM TB_CUSTOMER a ' +
-            //                     'left join ( ' +
-            //                         'SELECT DEV_KEY, CODE_03 ' +
-            //                         'FROM TB_DEFAULT_CONNECT_INFO ' +
-            //                         'WHERE CODE_01 = \'%s\' and CODE_02 = \'%s\' and CODE_03 = \'%s\' ' +
-            //                         'and DEV_TYPE = (SELECT DEFAULT_DEVICE FROM TB_CONTROL where CODE_01 = \'%s\' and CODE_02 = \'%s\' and CODE_03 = \'%s\') ' +
-            //                         ') b ' +
-            //                     'ON a.CUSTOMER_CODE = b.CODE_03 ' +
-            //                     'left join ( SELECT ADMIN_NM, ADMIN_DEPT_NM, ADMIN_ARANK, CODE_03, VIEWER_DEBUG FROM TB_ADMIN WHERE ADMIN_ID = \'%s\') c ' +
-            //                     'ON a.CUSTOMER_CODE = c.CODE_03 ' +
-            //                     'WHERE CUSTOMER_CODE = \'%s\'',request.session.code_01, request.session.code_02, request.session.code_03, request.session.code_01
-            //                     ,request.session.code_02, request.session.code_03, request.session.userid, request.session.code_03);
-
             query =	util.format('SELECT SV_OP_SV_V, SV_OP_SV_AR, a.ADMIN_NM, a.ADMIN_DEPT_NM, a.ADMIN_ARANK, a.VIEWER_DEBUG FROM ' +
                                 'TB_ADMIN a LEFT JOIN TB_CUSTOMER b ' +
                                 'ON a.CODE_03 = b.CUSTOMER_CODE ' +
@@ -6738,22 +6359,8 @@ app.post('/isAuthorityWriteNotice', CheckAuth, function (request, response) {
 
     pcViewerAPI.isAuthorityWriteNotice(dbConn, request, response);
 });
+*/
 
-app.get('/OpenVideo', CheckAuth, function(request, response) {
-    logger.info('Path move : /OpenVideo');
-
-    var fileName = request.param('fileName');
-
-    fs.readFile('open_video.html', 'utf-8', function(error, data) {
-
-        response.send(ejs.render(data, {
-            data: {
-                'fileName': fileName
-            }
-        }));
-
-    });
-});
 //---------------------------------------------------------------------------
 
 function HrefVar(a, b) {
@@ -6828,1302 +6435,18 @@ function decryptArray(results) {
     if (Object.keys(results).length > 0) {
         for (var i = 0; i < results.length; i++) {
 
-            //var keys = Object.keys;
-            //for (var j in keys) {
-            //if (keys[j] == "LOCATION_X" || keys[j] == "LOCATION_Y"){
             results[i].LOCATION_X = aes256cbc.decrypt(results[i].LOCATION_X);
             results[i].LOCATION_Y = aes256cbc.decrypt(results[i].LOCATION_Y);
-            //}
-            //}
         }
     }
     return results;
 }
-//---------------------------------------------------------------------------------------------
-// App Server
-//---------------------------------------------------------------------------------------------
 
-// if (serverConf.StreamConnect) {
-//     var appServerIP = '127.0.0.1';
-//     var appServerPort = 12345;
-//     var client;
 
-//     var retryInterval = 3000;
-//     var retriedTimes = 0;
-//     var maxRetries = 10;
-
-//     var socket = new net.Socket();
-
-//     (function connect() {
-
-//         function reconnect() {
-//             if (retriedTimes >= maxRetries) {
-//                 throw new Error('retriedTimes > maxRetries');
-//             }
-
-//             retriedTimes += 1;
-//             setTimeout(connect, retryInterval);
-//         }
-//         var svip = {
-//             port: appServerPort,
-//             host: appServerIP,
-//             localAddress: appServerIP,
-//             localPort: 30000
-//         };
-//         //client = socket.connect(appServerPort, appServerIP, function() {
-//         client = socket.connect(svip, function() {
-//             logger.info('App Server tcp connected success');
-//         });
-
-//         client.on('connect', function() {
-
-//             retriedTimes = 0;
-//             logger.info('connect event emit');
-//         });
-
-//         var recvData = '';
-//         client.on('data', function(data) {
-//             logger.info('Noti message ocurred!');
-
-//             parsingMessage(data);
-//         });
-
-//         client.on('close', function() {
-//             logger.crit('Connection closed');
-
-//             reconnect();
-//         });
-
-//         client.on('error', function(err) {
-//             logger.crit('connect error', err);
-//         });
-
-//         //process.stdin.pipe(client, {end: false});
-//     }());
-// } //AppServer
-
-// function parsingMessage(data) {
-
-//     //logger.info('function : parsingMessage');
-//     struct.parsingBodyData(data, function(error, header, body, unProcessedBuf) {
-//         //    struct.parsingBodyData(data, function(error, header, body) {
-
-//         if (error) {
-//             logger.crit(error);
-//         } else {
-//             // if (header.resultCode != '0000') {
-//             //     io.sockets.emit('B999', body);
-//             // } else {
-//                 switch (header.command) {
-//                     case 'B100':
-//                     case 'B102': // TOSS 기본 연결
-
-//                         var resBody = 'MOBILE_NUM=' + body.MOBILE_NUM + '&CTN_DEVICE=' + body.CTN_DEVICE;
-//                         var packet = struct.makeData(header.command, resBody);
-//                         client.write(packet);
-//                         io.sockets.emit(header.command, body);
-//                         break;
-//                     case 'B602':
-//                     case 'B603':
-
-//                         var lcsAccsUrl = 'http://' + g_lcsAccUrl + ':8080/toss/?CUST_CTN=' + body.MOBILE_NUM + '&amp;INSERT_DATE=' + body.P_INSERT_DATE + '&amp;LCS_FLMGNO=' + body.LCS_FLMGNO;
-
-//                         var xml;
-//                         xml = '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:q0="http://lguplus/u3/esb" xmlns:q1="java:lguplus.u3.esb.osc115" xmlns:q2="java:lguplus.u3.esb.common" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">\n';
-//                         xml += '<soapenv:Body>\n';
-//                         xml += '<q0:Oscpc115>\n';
-//                         xml += '<q0:RequestRecord>\n';
-//                         xml += '<q1:ESBHeader>\n';
-//                         xml += '<q2:ServiceID>OSC115</q2:ServiceID>\n';
-//                         xml += '<q2:TransactionID>' + body.LCS_FLMGNO + '</q2:TransactionID>\n';
-//                         xml += '<q2:SystemID>LCS000</q2:SystemID>\n';
-//                         xml += '<q2:ErrCode></q2:ErrCode>\n';
-//                         xml += '<q2:ErrMsg></q2:ErrMsg>\n';
-//                         xml += '<q2:Reserved></q2:Reserved>\n';
-//                         xml += '</q1:ESBHeader>\n';
-//                         xml += '<q1:RequestBody>\n';
-//                         xml += '<q1:Oscpc115RequestInVO>\n';
-//                         xml += '<q1:lcsFlmgNo>' + body.LCS_FLMGNO + '</q1:lcsFlmgNo>\n';
-//                         xml += '<q1:lcsFlmgDvCd>' + body.LCS_FLMGDV_CD + '</q1:lcsFlmgDvCd>\n';
-//                         xml += '<q1:consNo>' + body.CONS_NO + '</q1:consNo>\n';
-//                         xml += '<q1:consReqNo>' + body.CONS_REQNO + '</q1:consReqNo>\n';
-//                         xml += '<q1:lcsUseBizIdntNo>' + body.LCS_USE_BIZIDNTNO + '</q1:lcsUseBizIdntNo>\n';
-//                         xml += '<q1:lcsAccsUrl>' + lcsAccsUrl + '</q1:lcsAccsUrl>\n';
-//                         xml += '<q1:prpsCoByPtyId>' + body.PRPSCOBYPTY_ID + '</q1:prpsCoByPtyId>\n';
-//                         xml += '</q1:Oscpc115RequestInVO>\n';
-//                         xml += '</q1:RequestBody>\n';
-//                         xml += '</q0:RequestRecord>\n';
-//                         xml += '</q0:Oscpc115>\n';
-//                         xml += '</soapenv:Body>\n';
-//                         xml += '</soapenv:Envelope>\n';
-//                         var bodyString = xml;
-
-//                         logger.info('toss bodyString:', bodyString);
-
-//                         var headers = {
-//                             'Content-Type': 'text/xml;charset=UTF-8',
-//                             'Content-Length': bodyString.length,
-//                             'soapAction': ''
-//                         };
-
-//                         // toss direct 접속
-//                         var options = {
-//                             host: TOSS_HOST,
-//                             port: TOSS_PORT,
-//                             //host: 'toss.lguplus.co.kr',
-
-//                             //시험서버
-//                             //host: '172.22.14.79',
-//                             //host: 'test.toss.lguplus.co.kr',
-//                             //port: 15011,
-//                             path: '/CSSI/OSC/Oscpc115',
-//                             method: 'POST',
-//                             headers: headers
-//                         };
-
-//                         var callback = function(response) {
-//                             //logger.info('callback1::: ');
-//                             response.on('data', function(data) {
-
-//                                 logger.info('toss response: ', data.toString());
-
-//                                 var xmlparse = data;
-//                                 var succYn;
-//                                 var msg;
-//                                 var transactionID;
-
-//                                 parseString(xmlparse, function(err, result) {
-//                                     //json 값 가져오기
-//                                     if (err)
-//                                         logger.crit('toss parse err:', err);
-
-//                                     transactionID = result['soapenv:Envelope']['soapenv:Body'][0]['ns3:Oscpc115Response'][0]['ns3:ResponseRecord'][0]['q1:ESBHeader'][0]['q2:TransactionID'];
-//                                     succYn = result['soapenv:Envelope']['soapenv:Body'][0]['ns3:Oscpc115Response'][0]['ns3:ResponseRecord'][0]['ResponseBody'][0]['Oscpc115ResponseOutVO'][0]['succYn'];
-//                                     msg = result['soapenv:Envelope']['soapenv:Body'][0]['ns3:Oscpc115Response'][0]['ns3:ResponseRecord'][0]['ResponseBody'][0]['Oscpc115ResponseOutVO'][0]['msg'];
-//                                     logger.info('toss transactionID:', transactionID);
-//                                     logger.info('toss succYn:', succYn);
-//                                     logger.info('toss msg:', msg);
-//                                 });
-
-//                                 //update : value
-//                                 var query = 'UPDATE TB_TOSS_HISTORY SET RESULT=?, MESSAGE=?, RESPONSE_TIME = DATE_FORMAT(now(),"%Y%m%d%H%i%s")' +
-//                                     ' WHERE LCS_FLMGNO=? AND DEL_FLAG=?';
-
-//                                 //dbConn.query(query,[succYn, msg, body.MOBILE_NUM, body.P_INSERT_DATE,toss_map.get("lcsFlmgNo")], function (error, results) {
-//                                 dbConn.query(query, [succYn, msg, transactionID, '0'], function(error, results) {
-//                                     logger.info('Query:', query);
-
-//                                     if (error) {
-//                                         logger.error('DB Error:', error);
-//                                     } else {
-                                        
-//                                     }
-//                                 });
-//                             });
-
-//                             //the whole response has been recieved, so we just print it out here
-//                             response.on('end', function() {
-//                                 logger.info('end');
-//                                 //console.log(succYn + '' + msg);
-//                             });
-//                         };
-
-//                         //insert: body data (TB_TOSS_HISTORY)
-
-//                         http.request(options, callback).write(bodyString);
-
-//                         //var lcsAccsUrl = 'http://'+ g_lcsAccUrl + ':8080/toss/?CUST_CTN='+body.MOBILE_NUM + '&INSERT_DATE=' + body.P_INSERT_DATE + '&LCS_FLMGNO=' + toss_map.get("lcsFlmgNo");
-//                         var lcsAccsUrl = 'http://' + g_lcsAccUrl + ':8080/toss/?CUST_CTN=' + body.MOBILE_NUM + '&INSERT_DATE=' + body.P_INSERT_DATE + '&LCS_FLMGNO=' + body.LCS_FLMGNO;
-
-//                         var result = '';
-//                         var query = 'INSERT INTO TB_TOSS_HISTORY ' +
-//                             '(P_CUST_CTN, P_INSERT_DATE, LCS_FLMGNO, TOSS_TYPE, LCS_FLMGDV_CD, CONS_NO, CONS_REQNO, LCS_USE_BIZIDNTNO, LCS_ACCURL, PRPSCOBYPTY_ID, REQUEST_TIME, RESULT, DEL_FLAG) ' +
-//                             'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATE_FORMAT(now(),"%Y%m%d%H%i%s"), ?, ?)';
-
-//                         //dbConn.query(query,[body.MOBILE_NUM, body.P_INSERT_DATE, toss_map.get("lcsFlmgNo"),toss_map.get("lcsFlmgDvCd"),toss_map.get("consNo"),toss_map.get("consReqNo"), lcsAccsUrl, toss_map.get("prpsCoByPtyId"),result], function (error, results) {
-//                         dbConn.query(query, [body.MOBILE_NUM, body.P_INSERT_DATE, body.LCS_FLMGNO, '1', body.LCS_FLMGDV_CD, body.CONS_NO, body.CONS_REQNO, body.LCS_USE_BIZIDNTNO, lcsAccsUrl, body.PRPSCOBYPTY_ID, result, '0'], function(error, results) {
-//                             logger.info('Query:', query);
-
-//                             if (error) {
-//                                 logger.error('DB Error:', error);
-//                             } else {
-                                
-//                             }
-//                         });
-//                         break;
-//                     case 'B410':
-//                         body.LOCATION_X = aes256cbc.decrypt(body.LOCATION_X);
-//                         body.LOCATION_Y = aes256cbc.decrypt(body.LOCATION_Y);
-//                         io.sockets.emit(header.command, body);
-//                         break
-//                     case 'B400':
-//                     case 'B500': // STB Status Message (noti)
-//                     case 'B501': // Mobile Viewer Status Message (noti)
-//                     case 'B600':
-//                     case 'B601': // 단말 수신측 종료에 의한 Mobile 서비스 종료
-//                     case 'B900': // PC Viewer 비정상 종료
-//                     case 'B801': // PC Viewer 단말 송신측 종료 (noti)
-//                     case 'B902': // PC Viewer
-//                     case 'B231': // 공지사항 작성 배포
-//                         io.sockets.emit(header.command, body);
-//                         break;
-//                         //#1 Start [2015.07.23] by ywhan
-//                     case 'D002': // member join
-//                         var resBody = 'MOBILE_NUM=' + body.MOBILE_NUM + '&CTN_DEVICE=' + body.CTN_DEVICE;
-//                         var packet = struct.makeData(header.command, resBody);
-//                         client.write(packet);
-
-//                         var code_01 = body.CONTROL_ID.substring(0, 3);
-//                         var code_02 = body.CONTROL_ID.substring(3, 6);
-//                         var code_03 = body.CONTROL_ID.substring(6, 9);
-
-//                         var query = util.format('SELECT CTN,NM,DEPT_NM,ARANK FROM TB_ORGANOGRAM WHERE CTN = \'%s\' and DEPT_CODE_01 = \'%s\' and DEPT_CODE_02 = \'%s\' and DEPT_CODE_03 = \'%s\'', body.MOBILE_NUM, code_01, code_02, code_03);
-
-//                         dbConn.query(query, function(error, results) {
-//                             logger.info('Query:', query);
-
-//                             if (error) {
-//                                 logger.error('DB Error:', error);
-//                             } else {
-                                
-
-//                                 var voiceInfo;
-//                                 if (Object.keys(results).length > 0) {
-//                                     voiceInfo = merge(results[0], body);
-//                                     logger.info('results + body merge');
-//                                 } else {
-//                                     logger.info('results emtpy');
-
-//                                     var unknown = {
-//                                         NM: body.MOBILE_NUM,
-//                                         CTN: body.MOBILE_NUM,
-//                                         DEPT_NM: "-",
-//                                         ARANK: "-"
-//                                     };
-//                                     voiceInfo = merge(unknown, body);
-//                                 }
-
-//                                 logger.info('make D200');
-//                                 var jsonData = struct.makeJsonTypeAddVoice(voiceInfo);
-//                                 packet = struct.makeData('D200', jsonData);
-//                                 client.write(packet);
-//                             }
-//                         });
-//                         //#1 End
-//                     case 'D001': // room create
-//                         //io.sockets.emit(header.command, body);
-//                     case 'B101': // Quick connect
-//                     case 'D003': // member stb send request
-//                     case 'B103': // TOSS Quick connect
-//                     case 'B104': // Multi control
-
-//                         if (header.resultCode != '0000') {
-//                             io.sockets.emit('B998', body);
-//                         } else {
-//                             var query;
-//                             var code_01 = body.CONTROL_ID.substring(0, 3);
-//                             var code_02 = body.CONTROL_ID.substring(3, 6);
-//                             var code_03 = body.CONTROL_ID.substring(6, 9);
-
-//                             function fetchID(callback) {
-//                                 var query1 = 'SELECT DEFAULT_DEVICE FROM TB_CONTROL ';
-//                                 query1 += 'WHERE CODE_01 = \'' + code_01 + '\' AND CODE_02 = \'' + code_02 + '\' AND CODE_03 = \'' + code_03 + '\'';
-//                                 dbConn.query(query1, function(err, rows) {
-//                                     logger.info('Query: ', query1);
-//                                     if (err) {
-//                                         logger.error('DB Error: ', err);
-//                                         callback(err, null);
-//                                     } else {
-//                                         if (Object.keys(rows).length > 0) {
-//                                             callback(null, rows[0].DEFAULT_DEVICE);
-//                                         } else {
-//                                             callback(err, null);
-//                                         }
-//                                     }
-//                                 });
-//                             }
-
-//                             var device, isService;
-//                             fetchID(function(err, content) {
-//                                 device = content;
-
-//                                 if (device == STB) {
-
-//                                     query = 'SELECT a.STB_MAC_ADDR,a.STB_NM ,a.STB_DEPT_NM,a.SVC_STB_IP,a.STB_DEPT_CODE_01,a.STB_DEPT_CODE_02,a.STB_DEPT_CODE_03,a.STB_LOCATION,a.STB_ADMIN_INFO,a.CTN_SEQ,b.STATUS';
-//                                     query += ' FROM TB_STB_INFO a left join ( SELECT STATUS ,STB_MAC_ADDR FROM TB_STB_SERVICE WHERE STATUS < \'3\' ) b';
-//                                     query += ' ON a.STB_MAC_ADDR = b.STB_MAC_ADDR';
-//                                     query += ' WHERE STB_DEPT_CODE_01 =\'' + code_01 + '\' and STB_DEPT_CODE_02 = \'' + code_02 + '\' and STB_DEPT_CODE_03 =\'' + code_03 + '\' and b.STATUS is null';
-//                                     query += ' GROUP BY a.STB_MAC_ADDR ORDER BY a.STB_DEPT_NM, a.STB_NM Limit 1';
-
-//                                     dbConn.query(query, function(error, results) {
-//                                         logger.info('Query:', query);
-
-//                                         if (error) {
-//                                             logger.error('DB Error:', error);
-//                                         } else {
-                                            
-
-//                                             var jsonData;
-//                                             if (Object.keys(results).length > 0) {
-//                                                 logger.info('body:', body);
-//                                                 var stbInfo = merge(results[0], body);
-//                                                 jsonData = struct.makeJsonTypeAddSTB(stbInfo);
-//                                                 isService = 'Y';
-//                                             } else {
-//                                                 isService = 'N';
-//                                                 jsonData = struct.makeJsonTypeFullUse(body);
-//                                             }
-
-
-//                                             packet = struct.makeData(header.command, body, isService);
-//                                             client.write(packet);
-
-
-//                                             if (header.command == 'B101' || header.command == 'B103' || header.command == 'B104')
-//                                                 packet = struct.makeData('B300', jsonData);
-//                                             else
-//                                                 packet = struct.makeData('D300', jsonData);
-//                                             client.write(packet);
-//                                         }
-//                                     });
-
-//                                 } else if (device == MOBILE || device == PC) {
-
-//                                     query = 'SELECT DEV_KEY, DEV_NM, DEV_DEPT_NM';
-//                                     query += ' FROM TB_DEFAULT_CONNECT_INFO';
-//                                     query += ' WHERE CODE_01 =\'' + code_01 + '\' and CODE_02 = \'' + code_02 + '\' and CODE_03 =\'' + code_03 + '\' and DEV_TYPE = \'' + device + '\'';
-//                                     query += ' ORDER BY DEV_DEPT_NM, DEV_NM';
-
-//                                     dbConn.query(query, function(error, results) {
-//                                         logger.info('Query:', query);
-
-//                                         if (error) {
-//                                             logger.error('DB Error:', error);
-//                                         } else {
-                                            
-
-//                                             var jsonData;
-//                                             if (Object.keys(results).length > 0) {
-//                                                 logger.info('body:', body);
-
-//                                                 isService = 'Y';
-//                                                 packet = struct.makeData(header.command, body, isService);
-//                                                 client.write(packet);
-
-//                                                 var mobileArray = new Array();
-//                                                 for (var i = 0; i < results.length; i++) {
-
-//                                                     if (device == MOBILE) {
-//                                                         var mobileInfo = new Object();
-
-//                                                         mobileInfo.name = results[i].DEV_NM;
-//                                                         mobileInfo.dept = 'iwsys'; //results[i].DEV_DEPT_NM;
-//                                                         mobileInfo.ctn = results[i].DEV_KEY;
-//                                                         mobileInfo.index = '0';
-//                                                         mobileArray.push(mobileInfo);
-
-//                                                         logger.info('mobileArrary push :', mobileInfo);
-
-//                                                         // 결과값을 다 받으면 한번에 전송
-//                                                         if (mobileArray.length == results.length) {
-//                                                             var mobileInfoList = {};
-//                                                             mobileInfoList.COMMAND = 'B302';
-//                                                             mobileInfoList.CTN_DEVICE = body.CTN_DEVICE;
-//                                                             mobileInfoList.MOBILE_NUM = body.MOBILE_NUM;
-//                                                             mobileInfoList.INSERT_DATE = body.P_INSERT_DATE;
-//                                                             mobileInfoList.VIEW_TYPE = device;
-//                                                             mobileInfoList.mobileList = mobileArray;
-//                                                             packet = struct.makeData(mobileInfoList.COMMAND, mobileInfoList);
-//                                                             client.write(packet);
-//                                                         }
-//                                                     } else {
-//                                                         pcViewerAPI.GetViewerIndex2(dbConn, results[i], device, function(obj, viewInfo) {
-//                                                             logger.info('getViewerIndex callback :', obj[0].VIEW_INDEX);
-
-//                                                             viewInfo.index = obj[0].VIEW_INDEX;
-
-//                                                             var mobileInfo = new Object();
-//                                                             mobileInfo.name = viewInfo.DEV_NM;
-//                                                             mobileInfo.dept = viewInfo.DEV_DEPT_NM;
-//                                                             mobileInfo.ctn = viewInfo.DEV_KEY;
-//                                                             mobileInfo.index = viewInfo.index;
-//                                                             mobileArray.push(mobileInfo);
-//                                                             logger.info('mobileArrary push :', mobileInfo);
-
-//                                                             // 결과값을 다 받으면 한번에 전송
-//                                                             if (mobileArray.length == results.length) {
-//                                                                 var mobileInfoList = {};
-//                                                                 mobileInfoList.COMMAND = 'B302';
-//                                                                 mobileInfoList.CTN_DEVICE = body.CTN_DEVICE;
-//                                                                 mobileInfoList.MOBILE_NUM = body.MOBILE_NUM;
-//                                                                 mobileInfoList.INSERT_DATE = body.P_INSERT_DATE;
-//                                                                 mobileInfoList.VIEW_TYPE = device;
-//                                                                 mobileInfoList.mobileList = mobileArray;
-//                                                                 packet = struct.makeData(mobileInfoList.COMMAND, mobileInfoList);
-//                                                                 client.write(packet);
-//                                                             }
-//                                                         });
-//                                                     }
-//                                                 }
-//                                             } else {
-//                                                 isService = 'N';
-//                                                 packet = struct.makeData(header.command, body, isService);
-//                                                 client.write(packet);
-
-//                                                 jsonData = struct.makeJsonTypeFullUse(body);
-//                                                 packet = struct.makeData('B302', jsonData);
-//                                                 client.write(packet);
-//                                             }
-//                                         }
-//                                     });
-//                                 }
-//                             });
-
-//                             io.sockets.emit(header.command, body);
-//                         }
-//                         break;
-//                     case 'B105' :
-//                         var voiceArray = [];
-
-//                         var fav_key = body.FAV_KEY;
-//                         lcsServiceAPI.getBookMarkList(dbConn, fav_key, function (nestResult) {
-//                             if (Object.keys(nestResult).length > 0) {
-
-//                                 for (var i = 0; i < nestResult.length; i++) {
-//                                     if (nestResult[i].DEV_TYPE == MOBILE) {
-
-//                                         var viewArray = [];
-//                                         var viewInfo = {};
-//                                         viewInfo.name = nestResult[i].DEV_NM;
-//                                         viewInfo.dept = nestResult[i].DEV_DEPT_NM;
-//                                         viewInfo.ctn  = nestResult[i].DEV_KEY;
-//                                         viewInfo.index = '0';
-//                                         viewArray.push(viewInfo);
-
-//                                         var viewInfoList = {};
-//                                         viewInfoList.COMMAND = 'B302';
-//                                         viewInfoList.CTN_DEVICE  = body.CTN_DEVICE;
-//                                         viewInfoList.MOBILE_NUM  = body.MOBILE_NUM;
-//                                         viewInfoList.INSERT_DATE = body.P_INSERT_DATE;
-//                                         viewInfoList.VIEW_TYPE   = MOBILE;
-//                                         viewInfoList.mobileList  = viewArray;
-
-//                                         packet = struct.makeData('B302', viewInfoList);
-//                                         client.write(packet);
-//                                     } else if (nestResult[i].DEV_TYPE == STB) {
-
-//                                         var stbArray = [];
-//                                         var stbInfo = {};
-//                                         stbInfo.name = nestResult[i].DEV_NM;
-//                                         stbInfo.dept = nestResult[i].DEV_DEPT_NM;
-//                                         stbInfo.mac  = nestResult[i].DEV_KEY;
-//                                         stbArray.push(stbInfo);
-
-//                                         var stbInfoList = {};
-//                                         stbInfoList.COMMAND = 'B300';
-//                                         stbInfoList.INSERT_DATE = body.P_INSERT_DATE;
-//                                         stbInfoList.CTN_DEVICE = body.CTN_DEVICE;
-//                                         stbInfoList.MOBILE_NUM = body.MOBILE_NUM;
-//                                         stbInfoList.stbList = stbArray;
-
-//                                         packet = struct.makeData('B300', stbInfoList);
-//                                         client.write(packet);
-//                                     } else if (nestResult[i].DEV_TYPE == PC){
-
-//                                         pcViewerAPI.GetViewerIndex2(dbConn, nestResult[i], PC, function (obj, viewInfo) {
-//                                             logger.info('getViewerIndex callback :', obj[0].VIEW_INDEX);
-
-//                                             var pcArray = [];
-//                                             var pcInfo = {};
-//                                             pcInfo.name = viewInfo.DEV_NM;
-//                                             pcInfo.dept = viewInfo.DEV_DEPT_NM;
-//                                             pcInfo.ctn  = viewInfo.DEV_KEY;
-//                                             pcInfo.index = obj[0].VIEW_INDEX;
-//                                             pcArray.push(pcInfo);
-//                                             logger.info('pcArray push :', pcInfo);
-
-//                                             var viewInfoList = {};
-//                                             viewInfoList.COMMAND = 'B302';
-//                                             viewInfoList.CTN_DEVICE  = body.CTN_DEVICE;
-//                                             viewInfoList.MOBILE_NUM  = body.MOBILE_NUM;
-//                                             viewInfoList.INSERT_DATE = body.P_INSERT_DATE;
-//                                             viewInfoList.VIEW_TYPE   = PC;
-//                                             viewInfoList.mobileList  = pcArray;
-//                                             packet = struct.makeData('B302', viewInfoList);
-//                                             client.write(packet);
-//                                         });
-//                                     } else { // VOICE
-//                                         //if (body.TEL_YN == 'Y') {
-//                                             var voiceInfo = {};
-//                                             voiceInfo.name = nestResult[i].DEV_NM;
-//                                             voiceInfo.dept = nestResult[i].DEV_DEPT_NM;
-//                                             voiceInfo.ctn  = nestResult[i].DEV_KEY;
-//                                             voiceInfo.arank = '-';
-//                                             voiceArray.push(voiceInfo);
-//                                             logger.info('voiceArray push :', voiceInfo);
-//                                         //}
-//                                     }
-//                                 }
-//                             }
-//                         });
-
-//                         if (body.TEL_YN == 'Y') {
-
-//                             var code_01 = body.CONTROL_ID.substring(0,3);
-//                             var code_02 = body.CONTROL_ID.substring(3,6);
-//                             var code_03 = body.CONTROL_ID.substring(6,9);
-
-//                             lcsServiceAPI.getPhoneNumberOfControl(dbConn, code_01, code_02, code_03, function (obj) {
-//                                 logger.info('getPhoneNumberOfControl:', obj[0].CTL_TEL_NUM);
-
-//                                 var voiceInfo2 = {};
-//                                 voiceInfo2.name = obj[0].CTL_NM;
-//                                 voiceInfo2.dept = obj[0].CTL_ADMIN_NM;
-//                                 voiceInfo2.ctn  = obj[0].CTL_TEL_NUM;
-//                                 voiceInfo2.arank = '-';
-//                                 voiceArray.push(voiceInfo2);
-
-//                                 var voiceInfoList = {};
-//                                 voiceInfoList.COMMAND = 'B200';
-//                                 voiceInfoList.CTN_DEVICE  = body.CTN_DEVICE;
-//                                 voiceInfoList.MOBILE_NUM  = body.MOBILE_NUM;
-//                                 voiceInfoList.INSERT_DATE = body.P_INSERT_DATE;
-//                                 voiceInfoList.voiceList  = voiceArray;
-
-//                                 packet = struct.makeData('B200', voiceInfoList);
-//                                 logger.info('B105 packet send');
-//                                 client.write(packet);
-//                             });
-//                         }
-//                         break;
-//                     case 'B202': // 영상 서비스 중 mVoIP통화 연결을 하면 푸시
-
-//                         var code_01 = body.CONTROL_ID.substring(0, 3);
-//                         var code_02 = body.CONTROL_ID.substring(3, 6);
-//                         var code_03 = body.CONTROL_ID.substring(6, 9);
-
-//                         // 관제센터 디폴트가 mobile이 아니고 mVoIP 연결계정이 있을 경우 푸시 메세지 전송
-//                         logger.info('getCallId callback');
-
-//                         function getCallId(callback) {
-//                             var query3 = 'SELECT *, b.SV_OP_SV_V,c.DEV_KEY FROM TB_CONTROL a left join TB_CUSTOMER b ON a.CODE_03 = b.CUSTOMER_CODE';
-//                             query3 += ' left join (SELECT * FROM TB_DEFAULT_CONNECT_INFO WHERE DEV_TYPE = \'1\') c ';
-//                             query3 += ' ON a.CODE_01 = c.CODE_01 and a.CODE_02 = c.CODE_02 and a.CODE_03 = c.CODE_03 AND a.DEFAULT_DEVICE = c.DEV_TYPE'
-//                             query3 += ' WHERE a.CODE_01 = \'' + code_01 + '\' AND a.CODE_02 = \'' + code_02 + '\' AND a.CODE_03 = \'' + code_03 + '\'';
-//                             dbConn.query(query3, function(err, rows) {
-//                                 logger.info('Query: ', query3);
-//                                 if (err) {
-//                                     logger.error('DB Error: ', err);
-//                                     callback(err, null);
-//                                 } else {
-//                                     if (Object.keys(rows).length > 0) {
-//                                         callback(null, rows[0]);
-//                                     } else {
-//                                         callback(err, null);
-//                                     }
-//                                 }
-//                             });
-//                         }
-
-//                         getCallId(function(err, content) {
-//                             if (content == null) {
-//                                 logger.info('control is null');
-//                                 return;
-//                             }
-//                             logger.info('CALL_ID : ', content.CALL_ID);
-//                             //if (content.SV_OP_SV_V == 'Y' && body.CALL_TYPE == 'M' && body.F_CALL_TYPE == '1') {
-//                             if (content.SV_OP_SV_V == 'Y' && body.CALL_TYPE == 'M') {
-//                                 //if(content.DEFAULT_DEVICE != MOBILE || content != '-') {
-//                                 if (body.F_CALL_TYPE == '1') { // mobile 일 경우  gcm push
-//                                     logger.info('DEV_KEY : ' + content.DEV_KEY + '	F_MOBILE_NUM : ' + body.F_MOBILE_NUM);
-//                                     // 디폴트가 모바일이고 관제탑 전화번호와 디폴트 모바일 전화번호가 다를 경우 관제탑 전화로  mVoIP로 연결하기 위해 푸시
-//                                     if (body.F_MOBILE_NUM != content.DEV_KEY) {
-//                                         var voiceInfo = {};
-//                                         voiceInfo.name = content.CTL_NM;
-//                                         voiceInfo.device_id = content.
-//                                         //voiceInfo.ctn = content.CTL_TEL_NUM;
-//                                         voiceInfo.ctn = body.F_MOBILE_NUM;
-//                                         voiceInfo.view_ctn_device = body.VIEW_CTN_DEVICE;
-//                                         voiceInfo.dept = content.CTL_ADMIN_NM;
-//                                         voiceInfo.arank = '';
-
-//                                         var voiceArray = [];
-//                                         voiceArray.push(voiceInfo);
-
-//                                         var push_data = {};
-//                                         push_data.INSERT_DATE = body.P_INSERT_DATE;
-//                                         push_data.CTN_DEVICE = body.CTN_DEVICE;
-//                                         push_data.MOBILE_NUM = body.MOBILE_NUM;
-//                                         push_data.CALL_TYPE = '1';
-//                                         push_data.mobileList = voiceArray;
-
-//                                         push_gcm(push_data);
-//                                     }
-//                                 } else { // 3 : pc 일 경우
-//                                     io.sockets.emit(header.command, body);
-//                                 }
-//                             }
-//                         })
-//                         break;
-//                     case 'D099': // room destroy
-//                         var packet = struct.makeData(header.command, body);
-//                         client.write(packet);
-//                         io.sockets.emit(header.command, body);
-//                         break;
-//                     case 'B200': // Voice 추가 응답
-//                     case 'B300': // STB 추가 응답
-//                     case 'B302': // Viewer 추가 응답
-//                     case 'B303': // Viewer 삭제 응답
-
-//                         // error 응답 처리
-//                         if (header.resultCode != '0000') {
-//                             io.sockets.emit('B999', body);
-//                         } else {
-
-//                             // Mobile이고 추가 했을 경우는 PUSH 메세지 전송
-//                             if (header.command == 'B302' && body.VIEW_TYPE == MOBILE) {
-
-//                                 //add mobile 응답 확인 후에 PUSH MESSAGE 전송을 해야 함
-//                                 var mobileArray = new Array();
-
-//                                 var mobileInfo = new Object();
-//                                 mobileInfo.ctn = body.VIEW_NUM;
-//                                 mobileInfo.view_ctn_device = body.VIEW_CTN_DEVICE;
-//                                 mobileArray.push(mobileInfo);
-
-//                                 var mobileInfoList = new Object();
-//                                 mobileInfoList.INSERT_DATE = body.LAST_DATE;
-//                                 mobileInfoList.MOBILE_NUM = body.MOBILE_NUM;
-//                                 mobileInfoList.DEV_NM = body.DEV_NM;
-//                                 mobileInfoList.DEV_DEPT_NM = body.DEV_DEPT_NM;
-//                                 mobileInfoList.mobileList = mobileArray;
-
-//                                 var default_flag = body.DEFAULT_FLAG;
-//                                 if (default_flag == '1') { // 기본연결이고 관제탑 전화번호와 수신 단말의 전화번호가 같을 경우 5초 딜레이
-//                                     setTimeout(function() { push_gcm(mobileInfoList); }, 5000);
-//                                 } else {
-//                                     push_gcm(mobileInfoList);
-//                                 }
-//                             }else if(header.command == 'B302' && body.VIEW_TYPE == PC) {
-//                                 var query = 'INSERT INTO TB_LOCATION_ADMIN_MAPPING ' +
-//                                     '(P_CUST_CTN, P_INSERT_DATE, STATUS, ADMIN_ID, INSERT_DATE ) VALUES (\'' + body.MOBILE_NUM + '\', \'' + body.LAST_DATE + '\',7,\'' + body.VIEW_NUM + '\',DATE_FORMAT(now(),"%Y%m%d%H%i%s") ) ';
-//                                 dbConn.query(query, function(error, result) {
-//                                     logger.info('Query:', query);
-//                                     if (error) {
-//                                         logger.error('DB Error', error);
-//                                     } else {
-                                        
-//                                     }
-//                                 });
-//                             }
-
-//                             io.sockets.emit(header.command, body);
-//                         }
-//                         break;
-//                     case 'B304': // 영상 서비스 수신 시작
-//                     case 'B305': // 영상 서비스 수신 종료
-//                         // error 응답 처리
-//                         if (header.resultCode == '0009') {
-//                             io.sockets.emit('B998', body);
-//                         } else if (header.resultCode == '0099') {
-//                             io.sockets.emit('B997', body);
-//                         } else {
-//                             io.sockets.emit(header.command, body);
-//                         }
-//                         break;
-//                     case 'B001': // reg id 등록 /수정
-
-//                         pushServiceAPI.checkValidRegID(dbConn, body, function(error, results) {
-
-//                             var date = new Date().formatDate("yyyyMMddhhmmss");
-//                             if (Object.keys(results).length == 0) { // regId 최초등록
-
-//                                 var query = util.format('INSERT INTO TB_PUSH_REG_INFO (DEV_KEY, DEV_TYPE, REG_ID, REG_STATUS, INSERT_DATE, UPDATE_DATE) VALUES' +
-//                                     '( \'%s\', \'%s\', \'%s\', \'%s\', \'%s\', \'%s\')', body.MOBILE_NUM, '1', body.REG_ID, '1', date, date);
-//                             } else { // update
-
-//                                 var query = util.format('UPDATE TB_PUSH_REG_INFO SET REG_ID = \'%s\', UPDATE_DATE = \'%s\' WHERE DEV_KEY = \'%s\' and DEV_TYPE = \'%s\'', body.REG_ID, date, body.MOBILE_NUM, '1');
-
-//                             }
-
-//                             var responseValue;
-//                             dbConn.query(query, function(error, result) {
-
-//                                 logger.info('Query:', query);
-
-//                                 if (error) {
-//                                     responseValue = '1';
-//                                     logger.error('DB Error:', error);
-//                                 } else {
-                                    
-//                                     responseValue = '0';
-//                                 }
-
-//                                 var resBody = 'REG_RST=' + responseValue + '&MOBILE_NUM=' + body.MOBILE_NUM;
-//                                 var packet = struct.makeData(header.command, resBody);
-//                                 client.write(packet);
-//                             });
-//                         });
-//                         break;
-//                     case 'B003':
-//                         pushServiceAPI.insertPushResponseHistory(dbConn, body, function() {
-
-//                             logger.info('insertPushResponseHistory end');
-
-//                             var packet = struct.makeData(header.command, '');
-//                             client.write(packet);
-
-//                             io.sockets.emit(header.command, body);
-//                         });
-//                         break;
-//                     case 'B216' :
-//                         if (header.reqType == 1) io.sockets.emit(header.command, body);
-//                             break;
-//                     // drone message
-//                     case 'B207' :
-//                         var resData = {};
-//                         resData.header = header;
-//                         resData.body = body;
-//                         droneResult.emit('startRecording', resData);
-//                         break;
-//                     case 'B903' :
-//                         var resData = {};
-//                         resData.header = header;
-//                         resData.body = body;
-//                         droneResult.emit('stopRecording', resData);
-//                         break;
-//                     case 'B170' :
-//                         var resData = {};
-//                         resData.header = header;
-//                         resData.body = body;
-//                         droneResult.emit('startSnapshot', resData);
-//                         if (body.JUST_UPLOAD_FLAG == '1') { // 실시간 업로드 요청일 경우에만 폴더 생성
-//                             var folderName = new Date().formatDate("yyyyMMddhhmmss");
-//                             cloudLib.createFolder(body.USER_ID, body.MOBILE_NUM, '2', folderName, body.IDENTIFICATION, function(err, bResult, result) {
-//                                 logger.info(err, bResult, result);
-//                             });
-//                         }
-//                         break;
-//                     case 'B171' :
-//                         var resData = {};
-//                         resData.header = header;
-//                         resData.body = body;
-//                         droneResult.emit('upload', resData);
-//                         var folderName = new Date().formatDate("yyyyMMddhhmmss");
-//                         cloudLib.createFolder(body.USER_ID, body.MOBILE_NUM, '1', folderName, body.IDENTIFICATION, function(err, bResult, result) {
-//                             logger.info(err, bResult, result);
-//                         });
-//                         break;
-//                     case 'B172':    // 파일 전체 업로드 완료
-//                         io.sockets.emit(header.command, body);
-//                         break;
-//                     case 'B173' :   // 파일 [드론 클라이언트] -> [중계서버] 업로드 완료
-//                         // [중계서버] -> [유클라우드] 업로도 수행
-//                         if (body.USER_ID != "undefined") {      // 웹서버 재부팅으로 세션이 없을 때는 처리 안하도록
-//                             var fileInfo = {};
-//                             fileInfo.uploadName = body.FILENAME;
-//                             fileInfo.uploadSize = body.FILESIZE;
-//                             fileInfo.uploadFile = body.PATH + '/' + body.FILENAME;
-//                             // cloudLib.uploadRequest(body, fileInfo);
-//                             this.setTimeout(function() { 
-//                                 cloudLib.uploadRequest('new', body, fileInfo); 
-//                             }, 2000);
-//                             // cloudLib.uploadRequest('new', body, fileInfo);
-//                             io.sockets.emit(header.command, body);
-//                         } else {
-//                             io.sockets.emit('serverdown');
-//                         }                        
-//                         break;
-//                     default:
-//                         var protocolMsg = merge(header, body);
-//                         io.sockets.emit(header.command, protocolMsg);
-//                         break;
-//                 }
-//             //}
-
-//             logger.info('Noti message emit:', header.command);
-
-//             if (unProcessedBuf.length > 0) {
-//                 logger.info('recursive coupled massage data  <== ', unProcessedBuf.toString());
-//                 parsingMessage(unProcessedBuf);
-//             }
-//         }
-//     });
-// }
-
-
-//---------------------------------------------------------------------------------------------
-// client socket.io
-//---------------------------------------------------------------------------------------------
-var packet;
-// var io = require('socket.io').listen(server);
-// io.sockets.on('connection', function (socket) {
-//     id = socket.id;
-
-//     logger.info("socket.io connection:", id);
-//     socket.on('addVoice', function(data) {
-//     	logger.info('Add Voice Event occurred.');
-//     	//logger.info('Receive Data:', data);
-
-//         packet = struct.makeData(data.COMMAND, data);
-
-//         //logger.info('packet:', packet);
-//         var retVal = client.write(packet, function(){
-//             if (retVal){
-//             	logger.info('packet write success');
-//                 //io.sockets.connected[id].emit('insertVoiceList', data);
-//                 logger.info('socket emit msgEvent / id:', id);
-
-//                 // 관제센터 영상 추가 시 푸시 메세지
-//                 if(data.mVoIP == 'Y' && data.CALL_TYPE == '1') {
-//                 	data.mobileList = data.voiceList;
-//                 	push_gcm(data);
-//                 }
-//             } else{
-//             	logger.info('packet write fail');
-//             }
-//         });
-//     });
-
-//     socket.on('retryVoice', function(data) {
-//     	logger.info('retryVoice Event occurred.');
-
-//         packet = struct.makeData(data.COMMAND, data);
-
-//         var retVal = client.write(packet, function(){
-//             if (retVal){
-//             	logger.info('packet write success');
-//                 var query = util.format('update TB_TERMINAL_IMAGE_TRANS set CTN_CNT=IFNULL(CTN_CNT, 0)+%d where CUST_CTN=\'%s\' and CTN_DEVICE=\'%s\' and INSERT_DATE=\'%s\''
-//                     ,data.voiceList.length, data.MOBILE_NUM, data.CTN_DEVICE, data.INSERT_DATE);
-//                 dbConn.query(query, function (error, results) {
-
-//                 	logger.info('Query:', query);
-
-//                     if (error){
-//                     	logger.error('DB Error:', error);
-//                     }else {
-                    	
-//                     }
-//                 });
-//             } else{
-//             	logger.error('packet write fail');
-//             }
-//         });
-//     });
-
-//     socket.on('addSTB', function(data) {
-//     	logger.info('Add STB event occurred');
-    
-//         packet = struct.makeData(data.COMMAND, data);
-
-//         var retVal = client.write(packet, function(){
-//             if (retVal){
-//             	logger.info('packet write success');
-
-//                 var query = util.format('update TB_TERMINAL_IMAGE_TRANS set STB_CNT=IFNULL(STB_CNT, 0)+%d where CUST_CTN=\'%s\' and CTN_DEVICE=\'%s\' and INSERT_DATE=\'%s\''
-//                     ,data.stbList.length, data.MOBILE_NUM, data.CTN_DEVICE, data.INSERT_DATE);
-//                 dbConn.query(query, function (error, results) {
-
-//                 	logger.info('Query:', query);
-
-//                     if (error){
-//                     	logger.error('DB Error:', error);
-//                     }else {
-                    	
-//                         //response.send(results);
-//                     }
-//                 });
-
-//                 logger.info('socket emit msgEvent / id:', id);
-//             } else{
-//             	logger.error('packet write fail');
-//             }
-//         });
-//     });
-
-//     socket.on('retrySTB', function(data) {
-//     	logger.info('retrySTB event occurred');
-//     	//logger.info('Receive Data:', data);
-//         packet = struct.makeData(data.COMMAND, data);
-
-//         //logger.info('packet:', packet);
-//         var retVal = client.write(packet, function(){
-//             if (retVal){
-//             	logger.info('packet write success');
-
-//                 var query = util.format('update TB_TERMINAL_IMAGE_TRANS set STB_CNT=IFNULL(STB_CNT, 0)+%d where CUST_CTN=\'%s\' and CTN_DEVICE=\'%s\' and INSERT_DATE=\'%s\''
-//                     ,data.stbList.length, data.MOBILE_NUM, data.CTN_DEVICE, data.INSERT_DATE);
-//                 dbConn.query(query, function (error, results) {
-
-//                 	logger.info('Query:', query);
-
-//                     if (error){
-//                     	logger.error('DB Error:', error);
-//                     }else {
-                    	
-//                         //response.send(results);
-//                     }
-//                 });
-
-//             } else{
-//             	logger.error('packet write fail');
-//             }
-//         });
-//     });
-
-//     socket.on('deleteSTB', function(data) {
-//     	logger.info('Delete STB event occurred', data);
-//     	//logger.info('Receive Data:', data);
-//         packet = struct.makeData(data.COMMAND, data);
-//         //logger.info('packet:', packet);
-
-//         var retVal = client.write(packet, function(){
-//         });
-
-//     });
-
-// 	socket.on('addMobile', function(data) {
-// 		logger.info('addMobile event occurred');
-// 		packet = struct.makeData(data.COMMAND, data);
-
-// 		var retVal = client.write(packet, function() {
-// 			logger.info('addMobile packet was sent to Application Server');
-// 		});
-// 	});
-
-// 	socket.on('deleteMobile', function(data) {
-// 		logger.info('deleteMobile event occurred');
-// 		//logger.info('Receive Data:', data);
-// 		packet = struct.makeData(data.COMMAND, data);
-// 		//logger.info('packet:', packet);
-
-// 		var retVal = client.write(packet, function() {
-// 			logger.info('deleteMobile packet was sent to Application Server');
-// 		});
-// 	});
-// 	//#2 End
-
-//     socket.on('changeSetupEvent', function(data) {
-
-//     	logger.info('changeSetupEvent occured');
-
-//         if (data.COMMAND == "B708")
-//             packet = struct.makeData(data.COMMAND, data);
-//         else
-//             packet = struct.makeData(data, '');
-
-//         logger.info('make changeSetupEvent message');
-//         var retVal = client.write(packet, function() {
-//             if (retVal) {
-//             	logger.info('changeSetupEvent to AppServer was sent');
-//             }
-//         });
-//     });
-
-
-// 	socket.on('socketControl', function(data) {
-// 		logger.info('socketControl event occurred');
-// 		packet = struct.makeData(data.COMMAND, data);
-
-// 		var retVal = client.write(packet, function() {
-// 			logger.info('socketControl packet was sent to Application Server');
-// 		});
-// 	});
-
-
-//     socket.on('service_close', function(data) {
-
-//     	logger.info('service_close occured');
-
-//         var resBody = 'MOBILE_NUM='+data.MOBILE_NUM+'&CTN_DEVICE='+data.CTN_DEVICE+'&INSERT_DATE='+data.INSERT_DATE;
-//         packet = struct.makeData(data.COMMAND, resBody);
-
-//         logger.info('make service_close message');
-//         var retVal = client.write(packet, function() {
-//             if (retVal) {
-//             	logger.info('service_close to AppServer was sent');
-//             }
-//         });
-//     });
-
-//     socket.on('startStream', function (data) {
-
-//         logger.info('startStream event occured!');
-//         packet = struct.makeData(data.COMMAND, data);
-
-//         var retVal = client.write(packet, function () {
-//             if (retVal) {
-//                 logger.info('startStream event to AppServer was sent');
-//             }
-//         });
-//     });
-
-//     socket.on('EndStream', function (data) {
-
-//         logger.info('endStream event occured!');
-//         packet = struct.makeData(data.COMMAND, data);
-
-//         var retVal = client.write(packet, function () {
-//             if (retVal) {
-//                 logger.info('endStream event to AppServer was sent');
-//             }
-//         });
-//     });
-
-//     socket.on('Abnormal', function (data) {
-
-//         logger.info('Abnormal event occured!');
-//         packet = struct.makeData(data.COMMAND, data);
-
-//         var retVal = client.write(packet, function () {
-//             if (retVal) {
-//                 logger.info('Abnormal event to AppServer was sent');
-//             }
-//         });
-//     });
-
-//     //# start 20170828 by ywhan
-//     // VOD Play range
-//     socket.on('B306', function (data) {
-// 		logger.info('B306 event occured');
-// 		packet = struct.makeData(data.COMMAND, data);
-
-// 		var retVal = client.write(packet, function(){
-// 			logger.info('B306 event to AppServer was sent');
-// 		});
-//     });
-
-//     // VOD Pause
-//     socket.on('B307', function (data) {
-// 		logger.info('B307 event occured');
-// 		packet = struct.makeData(data.COMMAND, data);
-
-// 		var retVal = client.write(packet, function(){
-// 			logger.info('B307 event to AppServer was sent');
-// 		});
-//     });
-//     //# end
-
-//     //# start 20170531 by ywhan
-//     // AR Memo set up message [B210]
-// 	socket.on('B210', function (data) {
-// 		logger.info('B210 event occured');
-// 		packet = struct.makeData(data.COMMAND, data.BODY);
-
-// 		var retVal = client.write(packet, function(){
-// 			logger.info('B210 event to AppServer was sent');
-// 		});
-// 	});
-// 	// AR Memo play message [B211]
-// 	socket.on('B211', function (data) {
-// 		logger.info('B211 event occured');
-// 		packet = struct.makeData(data.COMMAND, data.BODY);
-
-// 		var retVal = client.write(packet, function(){
-// 			logger.info('B211 event to AppServer was sent');
-// 		});
-// 	});
-// 	// AR Memo add new pcviewer message [B212]
-// 	socket.on('B212', function (data) {
-// 		logger.info('B212 response event occured');
-// 		//packet = struct.makeData(data.COMMAND, data.BODY);
-// 		packet = struct.makeResponseData(data.COMMAND, "0000", data.BODY);
-
-// 		var retVal = client.write(packet, function(){
-// 			logger.info('B212 event to AppServer was sent');
-// 		});
-// 	});
-
-// 	// AR Memo History pcviewer message [B214]
-// 	socket.on('B214', function (data) {
-//         logger.info('B214 event occured');
-//         packet = struct.makeData(data.COMMAND, data.BODY);
-
-//         var retVal = client.write(packet, function(){
-//             logger.info('B214 event to AppServer was sent');
-//         });
-//     });
-
-// 	// AR Memo status notice message [B215]
-// 	socket.on('B215', function (data) {
-// 		logger.info('B215 event occured');
-// 		packet = struct.makeData(data.COMMAND, data.BODY);
-
-// 		var retVal = client.write(packet, function(){
-// 			logger.info('B215 event to AppServer was sent');
-// 		});
-// 	});
-// 	// AR Memo stop message [B216]
-// 	socket.on('B216', function (data) {
-// 		logger.info('B216 event occured');
-// 		if (data.METHOD == "request") {
-// 			logger.info('B216 request event occured');
-// 			packet = struct.makeData(data.COMMAND, data.BODY);
-// 		} else {
-// 			logger.info('B216 response event occured');
-// 			packet = struct.makeResponseData(data.COMMAND, "0000", data.BODY);
-// 		}
-
-// 		var retVal = client.write(packet, function(){
-// 			logger.info('B216 event to AppServer was sent');
-// 		});
-// 	});
-//     //# end 20170531
-
-//     // notice wirte request [B230]
-// 	socket.on('B230', function (data) {
-// 		logger.info('B230 event occured');
-// 		packet = struct.makeData(data.COMMAND, data.BODY);
-
-// 		var retVal = client.write(packet, function(){
-// 			logger.info('B230 event to AppServer was sent');
-// 		});
-// 	});
-
-//     // notice recieve response [B231]
-// 	socket.on('B231', function (data) {
-// 		logger.info('B231 response event occured');
-// 		packet = struct.makeResponseData(data.COMMAND, "0000", data.BODY);
-
-// 		var retVal = client.write(packet, function(){
-// 			logger.info('B231 event to AppServer was sent');
-// 		});
-// 	});
-
-//     socket.on('log_OperatePCViewer', function (data) {
-
-//         var logMsg;
-//         logMsg = 'OperatePCViewer' + ' [' + data.USER_ID + ']' + '[' + data.DIR + ']' + '[' + data.OPERATE + ']' + '[' + data.PARAM + ']' + ' : ' + data.RESULT;
-//         logger.info(logMsg);
-//     });
-// });
-
-
-function push_gcm(data) {
-    // push gcm start
-    if (data != null) {
-        //logger.info('[push_gcm] : ', JSON.stringify(data));
-        regQueue.push(data);
-        logger.info('regQueue : ', regQueue);
-        logger.info('regQueue pushed');
-    }
-
-    // 우선순위 재조립
-    logger.info('sort');
-    // Sort();
-
-    // GCM Server와 동기 작업을 위해 요청 상태인지 체크
-    logger.info('regQueue length check : ', regQueue.length);
-    if (data != null && regQueue.length > 1) {
-        return;
-    }
-
-    // get reg_id
-    logger.info('Get Regid to target device');
-    pushServiceAPI.GetRegIds(dbConn, regQueue[0], function(tarGetInfo, regIdGrp) {
-
-        // mVoIP
-        if (typeof tarGetInfo.CALL_TYPE == "undefined" || tarGetInfo.CALL_TYPE == null) tarGetInfo.CALL_TYPE = 3;
-        if (tarGetInfo.CALL_TYPE == 1) {
-            tarGetInfo.title = '[IIOT-LIVECAM] mVoIP 음성 서비스';
-            //tarGetInfo.content = tarGetInfo.MOBILE_NUM + '/' + tarGetInfo.DEV_NM + '/' + tarGetInfo.DEV_DEPT_NM + '로 부터 수신 받은 영상을 확인하시겠습니까?';
-            tarGetInfo.content = tarGetInfo.MOBILE_NUM + '로부터 통화요청이 왔습니다.\n\n통화연결을 하시겠습니까?';
-            //XX관제센터에서 통화요청이 왔습니다. 통화연결을 하시겠습니까?
-            tarGetInfo.MSG_TYPE = 'CALL';
-            tarGetInfo.PUSH_TYPE = '3';
-        } else {
-            tarGetInfo.title = '[IIOT-LIVECAM] 영상 수신 서비스';
-            tarGetInfo.content = tarGetInfo.MOBILE_NUM + '/' + tarGetInfo.DEV_NM + '/' + tarGetInfo.DEV_DEPT_NM + '로 부터 수신 받은 영상을 확인하시겠습니까?';
-            tarGetInfo.MSG_TYPE = 'VIEW';
-            tarGetInfo.PUSH_TYPE = '1';
-        }
-        pushMessage(tarGetInfo, regIdGrp);
-    });
-}
-
-var retransCount = 0;
-
-function pushMessage(info, registrationIds) {
-
-    //var server_access_key = "AIzaSyAURTN3yKn0U8s6Lbl8rKylrhC4INCi6FA";
-    var sender = new gcm.Sender(serverConf.server_access_key);
-
-    var message = new gcm.Message();
-
-    // send push message
-    info.cust_key = new Date().getTime();
-    info.requestTime = new Date().formatDate("yyyyMMddhhmmss") + '' + new Date().getMilliseconds();
-
-    message.addData('P_CUST_CTN', info.MOBILE_NUM);
-    message.addData('P_INSERT_DATE', info.INSERT_DATE);
-
-    // 추가
-    message.addData('VIEW_NUM', info.mobileList[0].ctn);
-    message.addData('VIEW_CTN_DEVICE', info.mobileList[0].view_ctn_device);
-
-    message.addData('MSG_TYPE', info.MSG_TYPE);
-    message.addData('CUST_KEY', info.cust_key);
-    message.addData('PUSH_TYPE', info.PUSH_TYPE);
-    message.addData('TITLE', info.title);
-    message.addData('MESSAGE', info.content);
-    message.addData('REQUEST_TIME', info.requestTime);
-
-    logger.info('send message : ', message);
-    sender.send(message, {
-        registrationTokens: registrationIds
-    }, 1, function(err, response) {
-
-        if (err) {
-            logger.crit('gcm send error:', err);
-        }
-
-        var curTime = new Date().formatDate("yyyyMMddhhmmss") + '' + new Date().getMilliseconds();
-        info.responseTime = curTime;
-
-        logger.info('response : ', response);
-
-        // call back
-        //-- 응답 결과 데이터 Insert
-        pushServiceAPI.insertResult(dbConn, info, registrationIds, response);
-
-        //-- 응답 결과 분석 후 reg_id DB 수정
-        pushServiceAPI.manageRegID(dbConn, info, response, function(ret) {
-
-            // 재전송 필요
-            if (ret != null) {
-                logger.info('retry regQueue add : ', ret);
-                if (retransCount < 3) {
-                    regQueue.push(ret);
-                    retransCount++;
-                } else {
-                    retransCount = 0;
-                }
-            }
-
-            logger.info('manageRegID end');
-        });
-
-
-        // 처리된 push 요청 제거
-        logger.info('queue 제거');
-        regQueue.shift();
-
-        //addpushdelay = addpushdelay - 1;
-
-        //-- queue에 보낼 요청이 남아 있다면 send push message
-        if (regQueue.length > 0) {
-            logger.info('regQueue.length :', regQueue.length);
-            logger.info('recursive push_gcm');
-            push_gcm(null);
-        }
-
-        //-- 없으면 빠져 나오기
-        logger.info('exit push_gcm');
-    });
-}
-
-
-//공지사항  push Message Send
+/**
+ * 공지사항 PUSH 기능
+ */
+/*
 app.all('/noticepush', CheckAuth, function(request, response) {
 
     var message = request.param('title');
@@ -8467,657 +6790,7 @@ function re_send(fail_reg_id, MESSAGE, insert_date, seq, cust_ctn, r_count) {
         }
     });
 }
-
-
-app.get('/test', function(request, response) {
-    logger.info('Path change : /test');
-    fs.readFile('test.html', 'utf8', function(error, data) {
-        if (error) {
-            logger.error('Error:', error);
-        } else {
-            response.writeHead(200, {
-                'Content-Type': 'text/html; charset=UTF-8'
-            });
-            response.end(data);
-        }
-    });
-});
-
-
-app.get('/knowReport', CheckAuth, function(request, response) {
-    logger.info('Path change : /knowReport');
-
-    fs.readFile('know_report.html', 'utf8', function(error, data) {
-        if (error) {
-            logger.error('Error:', error);
-        } else {
-            response.writeHead(200, {
-                'Content-Type': 'text/html; charset=UTF-8'
-            });
-            response.end(data);
-        }
-    });
-});
-
-app.get('/knowledgeAdd', CheckAuth, function(request, response) {
-    logger.info('Path change : /knowledgeAdd');
-    fs.readFile('knowledge_add.html', 'utf8', function(error, data) {
-        if (error) {
-            logger.error('Error:', error);
-        } else {
-            response.writeHead(200, {
-                'Content-Type': 'text/html; charset=UTF-8'
-            });
-            response.end(data);
-        }
-    });
-});
-
-
-app.get('/getLPMS', CheckAuth, function(request, response) {
-    logger.info('Path change : /getLPMS');
-
-    var req_no = request.param('lpms_reqno');
-    var query = 'select * from TB_LPMS_IFACE_HISTORY where LPMS_REQNO = \'' + req_no + '\' ';
-    dbConn.query(query, function(error, results) {
-        logger.info('Query:', query);
-        if (error) {
-            logger.error('Error:', error);
-        } else {
-            
-            response.send(results[0]);
-        }
-    });
-});
-
-app.get('/thumbnail', CheckAuth, function(request, response) {
-    logger.info('Path change : /thumbnail');
-
-    fs.readFile('thumbnail.html', 'utf8', function(error, data) {
-        if (error) {
-            logger.error('Error:', error);
-        } else {
-            response.writeHead(200, {
-                'Content-Type': 'text/html; charset=UTF-8'
-            });
-            response.end(data);
-        }
-    });
-});
-
-app.get('/thumbnailList', CheckAuth, function(request, response) {
-    logger.info('Path change : /thumbnailList');
-
-    var cust_ctn = request.param('CUST_CTN');
-    var insert_date = request.param('INSERT_DATE');
-
-    //var query = 'select * from TB_THUMBIMG_ANA_HISTORY where P_CUST_CTN = \''+cust_ctn+'\' and P_INSERT_DATE = \''+insert_date+'\' ';
-    var query = 'select * from TB_THUMBIMG_ANA_HISTORY where P_CUST_CTN = \'' + cust_ctn + '\' and P_INSERT_DATE = \'' + insert_date + '\' ';
-
-    dbConn.query(query, function(error, results) {
-
-        logger.info('Query:', query);
-        if (error) {
-            logger.error('Error:', error);
-        } else {
-            
-            response.send(results);
-        }
-    });
-});
-
-app.get('/thumbCount', CheckAuth, function(request, response) {
-    logger.info('Path change : /thumbCount');
-
-    var cust_ctn = request.param('CUST_CTN');
-    var insert_date = request.param('INSERT_DATE');
-
-    //var query = 'select * from TB_THUMBIMG_ANA_HISTORY where P_CUST_CTN = \''+cust_ctn+'\' and P_INSERT_DATE = \''+insert_date+'\' ';
-    var query = 'select count(*) as cnt from TB_THUMBIMG_ANA_HISTORY where P_CUST_CTN = \'' + cust_ctn + '\' and P_INSERT_DATE = \'' + insert_date + '\' ';
-
-    dbConn.query(query, function(error, results) {
-
-        logger.info('Query:', query);
-        if (error) {
-            logger.error('Error:', error);
-        } else {
-            
-            response.send(results[0]);
-        }
-    });
-});
-
-app.all('/thumbPaging', CheckAuth, function(request, response) {
-
-    logger.info('Path change : /thumbPaging');
-
-    var start = request.param('start');
-    var pageSize = request.param('pageSize');
-
-    var cust_ctn = request.param('CUST_CTN');
-    var insert_date = request.param('INSERT_DATE');
-
-    var query = 'select * from TB_THUMBIMG_ANA_HISTORY where P_CUST_CTN = \'' + cust_ctn + '\' and P_INSERT_DATE = \'' + insert_date + '\' ';
-
-    query += 'limit ' + start + ',' + pageSize + ' ';
-
-
-    dbConn.query(query, function(error, results, fields) {
-        logger.info('Query: ', query);
-
-        if (error) {
-            logger.error('DB Error: ', error);
-        } else {
-            
-
-            response.send(results);
-
-        }
-
-    });
-});
-
-app.all('/addKnow', CheckAuth, function(request, response) {
-
-    logger.info('Path Change: /addKnow')
-
-    var id = request.session.userid;
-    var CUST_CTN = request.param('CUST_CTN');
-    var INSERT_DATE = request.param('INSERT_DATE');
-    var date = request.param('date');
-    var CODE_01 = request.param('CODE_01');
-    var CODE_02 = request.param('CODE_02');
-    var CODE_03 = request.param('CODE_03');
-    var CODE_ID = request.param('CODE_ID');
-    var PREWORK_1 = request.param('PREWORK_1');
-    var PREWORK_2 = request.param('PREWORK_2');
-    var PREWORK_3 = request.param('PREWORK_3');
-    var PREWORK_4 = request.param('PREWORK_4');
-    var PREWORK_5 = request.param('PREWORK_5');
-    var PREWORK_6 = request.param('PREWORK_6');
-
-    var query = 'INSERT INTO TB_KNOWMNG_INFO ' +
-        '(REG_ID, INSERT_DATE, P_CUST_CTN, P_INSERT_DATE, CODE_01, CODE_02, CODE_03, CODE_ID, PREWORK_1, PREWORK_2, PREWORK_3, PREWORK_4, PREWORK_5, PREWORK_6) ' +
-        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
-
-    dbConn.query(query, [id, date, CUST_CTN, INSERT_DATE, CODE_01, CODE_02, CODE_03, CODE_ID, PREWORK_1, PREWORK_2, PREWORK_3, PREWORK_4, PREWORK_5, PREWORK_6], function(error, result) {
-        logger.info('Query: ', query);
-        if (error) {
-            logger.error('DB Error:', error);
-        } else {
-            
-            response.send(id);
-        }
-    });
-
-
-});
-
-app.all('/addKnowWork', CheckAuth, function(request, response) {
-    logger.info('Path Change: /addKnowWork')
-
-    var reg_id = request.param('reg_id');
-    var id;
-    if (reg_id == null || reg_id == 'null' || reg_id == 'undefined' || reg_id == undefined) {
-        id = request.session.userid;
-    } else {
-        id = reg_id;
-    }
-
-    var INSERT_DATE = request.param('INSERT_DATE');
-    var CUST_CTN = request.param('CUST_CTN');
-    var date = request.param('date');
-    var WORK_SEQ = request.param('WORK_SEQ');
-    var WORK_TYPE = request.param('WORK_TYPE');
-    var WORK_CONTENT = request.param('WORK_CONTENT');
-    var IMG_KEY1 = request.param('IMG_KEY1');
-    var IMG_KEY2 = request.param('IMG_KEY2');
-    var IMG_KEY3 = request.param('IMG_KEY3');
-
-    var query = 'INSERT INTO TB_KNOWMNG_WORKFLOW_INFO ' +
-        '(REG_ID, INSERT_DATE, WORK_SEQ, WORK_TYPE, WORK_CONTENT, IMG_KEY1, IMG_KEY2, IMG_KEY3) ' +
-        'VALUES (?, ?, (SELECT    max(WORK_SEQ) + 1   FROM     TB_KNOWMNG_WORKFLOW_INFO A) , ?, ?, ?, ?, ?)';
-
-    dbConn.query(query, [id, date, WORK_TYPE, WORK_CONTENT, IMG_KEY1, IMG_KEY2, IMG_KEY3], function(error, result) {
-        logger.info('Query: ', query);
-        if (error) {
-            logger.error('DB Error:', error);
-        } else {
-            
-            var query2 = 'update TB_TERMINAL_IMAGE_TRANS set KNOWMNG_REG_FLAG="1" where INSERT_DATE = \'' + INSERT_DATE + '\' and CUST_CTN = \'' + CUST_CTN + '\' ';
-
-            dbConn.query(query2, function(error, result) {
-                logger.info('Query: ', query2);
-
-                if (error) {
-                    logger.error('DB Error:', error);
-                } else {
-                    
-                    response.send(id);
-                }
-            });
-
-        }
-    });
-
-});
-
-app.all('/deleteKnow', CheckAuth, function(request, response) {
-
-    logger.info('Path Change: /deleteKnow')
-
-    var id = request.session.userid;
-    var P_CUST_CTN = request.param('P_CUST_CTN');
-    var P_INSERT_DATE = request.param('P_INSERT_DATE');
-    var INSERT_DATE = request.param('INSERT_DATE');
-
-    var query = 'update TB_KNOWMNG_INFO set DEL_FLAG="1" where P_INSERT_DATE = \'' + P_INSERT_DATE + '\' and P_CUST_CTN = \'' + P_CUST_CTN + '\' and INSERT_DATE = \'' + INSERT_DATE + '\'';
-
-    dbConn.query(query, function(error, result) {
-        logger.info('Query: ', query);
-        if (error) {
-            logger.error('DB Error:', error);
-        } else {
-            
-            response.send(INSERT_DATE);
-        }
-    });
-
-});
-
-app.all('/UpdateThumb', CheckAuth, function(request, response) {
-    logger.info('Path Change: /UpdateThumb')
-
-    var id = request.session.userid;
-    var INSERT_DATE = request.param('INSERT_DATE');
-    var CUST_CTN = request.param('CUST_CTN');
-    var IMG_KEY1 = request.param('IMG_KEY1');
-    var IMG_KEY2 = request.param('IMG_KEY2');
-    var IMG_KEY3 = request.param('IMG_KEY3');
-
-    var img;
-    if (IMG_KEY1 != 0) {
-        img = '(SEQ = \'' + IMG_KEY1 + '\') ';
-    }
-    if (IMG_KEY2 != 0) {
-        img += ' or (SEQ = \'' + IMG_KEY2 + '\')';
-    }
-    if (IMG_KEY3 != 0) {
-        img += ' or (SEQ = \'' + IMG_KEY3 + '\')';
-    }
-
-    var query = 'update TB_THUMBIMG_ANA_HISTORY set KNOWMNG_REG_FLAG="1" where P_INSERT_DATE = \'' + INSERT_DATE + '\' and P_CUST_CTN = \'' + CUST_CTN + '\' and ';
-    query += img;
-
-    dbConn.query(query, function(error, result) {
-        logger.info('Query: ', query);
-
-        if (error) {
-            logger.error('DB Error:', error);
-        } else {
-            
-            response.send(id);
-        }
-    });
-
-
-});
-
-app.all('/modKnowWork', CheckAuth, function(request, response) {
-    logger.info('Path Change: /modKnowWork')
-
-    var reg_id = request.param('reg_id');
-    var id;
-    if (reg_id == null || reg_id == 'null' || reg_id == 'undefined' || reg_id == undefined) {
-        id = request.session.userid;
-    } else {
-        id = reg_id;
-    }
-
-    var INSERT_DATE = request.param('INSERT_DATE');
-    var WORK_SEQ = request.param('WORK_SEQ');
-    var WORK_TYPE = request.param('WORK_TYPE');
-    var WORK_CONTENT = request.param('WORK_CONTENT');
-    var IMG_KEY1 = request.param('IMG_KEY1');
-    var IMG_KEY2 = request.param('IMG_KEY2');
-    var IMG_KEY3 = request.param('IMG_KEY3');
-
-    var query = 'update TB_KNOWMNG_WORKFLOW_INFO set WORK_TYPE=\'' + WORK_TYPE + '\',';
-    query += ' WORK_CONTENT = \'' + WORK_CONTENT + '\', IMG_KEY1 = \'' + IMG_KEY1 + '\' , IMG_KEY2 = \'' + IMG_KEY2 + '\' , IMG_KEY3 = \'' + IMG_KEY3 + '\'';
-    query += ' where REG_ID = \'' + id + '\' and WORK_SEQ = \'' + WORK_SEQ + '\' and INSERT_DATE = \'' + INSERT_DATE + '\'';
-
-    dbConn.query(query, function(error, result) {
-        logger.info('Query: ', query);
-        if (error) {
-            logger.error('DB Error:', error);
-        } else {
-            
-            response.send(id);
-        }
-    });
-
-});
-
-app.all('/knowWorkDelete', function(request, response) {
-    logger.info('Path Change: /knowWorkDelete')
-
-    var work_seq = request.param('work_seq');
-    var id = request.session.userid;
-    var INSERT_DATE = request.param('INSERT_DATE');
-
-    var query = 'delete from TB_KNOWMNG_WORKFLOW_INFO ';
-    query += 'where WORK_SEQ = \'' + work_seq + '\' and INSERT_DATE = \'' + INSERT_DATE + '\''
-
-    dbConn.query(query, function(error, result) {
-        logger.info('Query: ', query);
-        if (error) {
-            logger.error('DB Error:', error);
-        } else {
-            
-            response.send(work_seq);
-        }
-    });
-
-});
-
-app.all('/workList', CheckAuth, function(request, response) {
-
-    logger.info('Path change : /workList');
-
-    var id = request.session.userid;
-    var cust_ctn = request.param('CUST_CTN');
-    var insert_date = request.param('INSERT_DATE');
-    var k_insert_date = request.param('K_INSERT_DATE');
-
-    var query = 'select a.*, b.WORK_TYPE, b.WORK_CONTENT, b.WORK_SEQ, b.IMG_KEY1,b.IMG_KEY2,b.IMG_KEY3, ';
-    query += ' (select c.IMG_FILE_NM from TB_THUMBIMG_ANA_HISTORY c where b.IMG_KEY1 = c.SEQ) as IMG_NM1,'
-    query += ' (select c.IMG_FILE_NM from TB_THUMBIMG_ANA_HISTORY c where b.IMG_KEY2 = c.SEQ) as IMG_NM2,'
-    query += ' (select c.IMG_FILE_NM from TB_THUMBIMG_ANA_HISTORY c where b.IMG_KEY3 = c.SEQ) as IMG_NM3'
-    query += ' from TB_KNOWMNG_INFO a ';
-    query += ' LEFT JOIN';
-    query += ' (SELECT REG_ID, INSERT_DATE, WORK_TYPE, WORK_CONTENT, IMG_KEY1, IMG_KEY2, IMG_KEY3, WORK_SEQ';
-    query += ' FROM TB_KNOWMNG_WORKFLOW_INFO';
-    query += ' ) b';
-    query += ' ON a.REG_ID = b.REG_ID and a.INSERT_DATE = b.INSERT_DATE';
-    query += ' where a.P_CUST_CTN = \'' + cust_ctn + '\' and a.P_INSERT_DATE = \'' + insert_date + '\' and a.INSERT_DATE = \'' + k_insert_date + '\'';
-    query += ' order by b.WORK_SEQ';
-
-    dbConn.query(query, function(error, results, fields) {
-        logger.info('Query: ', query);
-
-        if (error) {
-            logger.error('DB Error: ', error);
-        } else {
-            
-
-            response.send(results);
-
-        }
-
-    });
-});
-
-app.all('/reportKnowList', CheckAuth, function(request, response) {
-
-    logger.info('Path change : /reportKnowList');
-
-    var id = request.session.userid;
-    var userlevel = request.session.userlv;
-    var code1 = request.session.code_01;
-    var code2 = request.session.code_02;
-    var code3 = request.session.code_03;
-
-    var cust_ctn = request.param('CUST_CTN');
-    var insert_date = request.param('INSERT_DATE');
-    var todate = request.param('todate').replace(/-/g, '');
-    var fromdate = request.param('fromdate').replace(/-/g, '');
-    var ctn = request.param('ctn');
-    var worktype = request.param('worktype');
-    var worknum = request.param('worknum');
-    var workcontent = request.param('workcontent');
-    var type = request.param('type');
-
-    if (type == 'excel') {
-        fromdate = parseInt(fromdate) + 1;
-    }
-
-    var query = 'select a.P_CUST_CTN, b.CUST_NM, c.CTL_NM, ';
-    query += ' e.LPMS_REQNO, e.LPMS_FACTORY, e.LPMS_CLASS, e.LPMS_TEAM, e.LPMS_GUBUN, e.LPMS_CONTENT, e.LPMS_COMPANY, e.REQUEST_STATUS,';
-    query += ' if(isnull(b.UPLOAD_FILE_NM), "-", "O") as UPLOAD_FILE, b.UPLOAD_FILE_NM,';
-    query += ' a.P_INSERT_DATE, b.UPDATE_DATE, b.UPLOAD_FILE_NM as UPLOAD_FILE, b.STATUS, b.DEFECT_CODE, d.REASON,';
-    query += ' b.TOT_BRIGHT_LVL, b.TOT_BRIGHT_RATE , b.TOT_DIFF_LVL, b.TOT_DIFF_RATE, a.INSERT_DATE, a.REG_ID ';
-    query += ' from TB_KNOWMNG_INFO a ';
-    query += ' LEFT JOIN';
-    query += ' (SELECT UPLOAD_FILE_NM, CUST_CTN, CUST_NM, INSERT_DATE, CODE_ID, DEFECT_CODE, UPDATE_DATE, STATUS, LPMS_REQNO,';
-    query += ' TOT_BRIGHT_LVL, TOT_BRIGHT_RATE , TOT_DIFF_LVL, TOT_DIFF_RATE';
-    query += ' FROM TB_TERMINAL_IMAGE_TRANS';
-    query += ' ) b';
-    query += ' ON a.P_CUST_CTN = b.CUST_CTN and a.P_INSERT_DATE = b.INSERT_DATE';
-    query += ' LEFT JOIN';
-    query += ' (SELECT CODE_ID, CTL_NM';
-    query += ' FROM TB_CONTROL';
-    query += ' ) c';
-    query += ' ON a.CODE_ID = c.CODE_ID';
-    query += ' LEFT JOIN';
-    query += ' (SELECT REASON, DEFECT_CODE';
-    query += ' FROM TB_DEFECT_CODE';
-    query += ' ) d';
-    query += ' ON b.DEFECT_CODE = d.DEFECT_CODE';
-    query += ' LEFT JOIN (';
-    query += ' 	SELECT';
-    query += ' 		LPMS_CLASS';
-    query += '         ,LPMS_REQNO';
-    query += '         ,LPMS_FACTORY, LPMS_TEAM, LPMS_GUBUN, LPMS_CONTENT, LPMS_COMPANY, WORKER_NAME, REQUEST_STATUS';
-    query += '     FROM';
-    query += '         TB_LPMS_IFACE_HISTORY';
-    query += ' ) e';
-    query += ' ON b.LPMS_REQNO = e.LPMS_REQNO';
-    query += ' WHERE P_INSERT_DATE >= \'' + todate + '\' and P_INSERT_DATE < \'' + fromdate + '\' and  a.DEL_FLAG is null';
-    //query += ' where P_CUST_CTN = \''+cust_ctn+'\' and P_INSERT_DATE = \''+insert_date+'\' ';
-
-    if (ctn == '' || ctn == null) {} else {
-        query += ' and b.CUST_CTN like \"%' + ctn + '%\"';
-    }
-
-    if (worktype == '' || worktype == null) {} else {
-        query += ' and e.LPMS_CLASS like \"%' + worktype + '%\"';
-        //query += ' and a.DEFECT_CODE = \''+defectcode+'\'';
-    }
-
-    if (worknum == '' || worknum == null) {} else {
-        query += ' and e.LPMS_REQNO like \"%' + worknum + '%\"';
-        //query += ' and a.DEFECT_CODE = \''+defectcode+'\'';
-    }
-
-    if (workcontent == '' || workcontent == null) {} else {
-        query += ' and e.LPMS_CONTENT like \"%' + workcontent + '%\"';
-        //query += ' and a.DEFECT_CODE = \''+defectcode+'\'';
-    }
-
-    //if (code1 == '900' && code2 == '999' && lv == '1') {
-    if (userlevel == 1) { // 슈퍼관리자
-        logger.info('superuser');
-    } else {
-        query += ' and a.REG_ID=\'' + id + '\' ';
-    }
-
-    query += ' order by a.INSERT_DATE desc ';
-
-
-    dbConn.query(query, function(error, results, fields) {
-        logger.info('Query: ', query);
-
-        if (error) {
-            logger.error('DB Error: ', error);
-        } else {
-            
-
-            //response.send(results);
-            var except = [];
-            except.push('DEFECT_CODE');
-            except.push('REASON');
-            except.push('UPLOAD_FILE');
-            except.push('INSERT_DATE');
-            except.push('REQUEST_STATUS');
-            except.push('UPLOAD_FILE_NM');
-            except.push('REG_ID');
-
-            if (type == 'excel') {
-                var filename = todate + "_" + fromdate + ".xlsx";
-                utilLib.excelExport(request, response, results, fields, filename, except);
-            } else {
-                response.send(results);
-            }
-
-        }
-
-    });
-});
-
-app.all('/orgToggleModify', CheckAuth, function(request, response) {
-
-    logger.info('Path change : /orgToggleModify');
-
-    var ctn = request.param('ctn');
-    var flag = request.param('flag');
-
-    if (flag == 'Y') {
-        flag = 'N'
-    } else {
-        flag = 'Y'
-    }
-
-    var query = 'UPDATE TB_ORGANOGRAM SET BLOCK_FLAG=\'' + flag + '\' WHERE CTN=\'' + ctn + '\'';
-
-    logger.info('Query:', query);
-
-    dbConn.query(query, function(error, result) {
-
-        if (error) {
-            logger.error('DB Error: ', error);
-        } else {
-            
-
-            response.send(ctn);
-        }
-
-    });
-});
-
-app.get('/thumbimg_file', function(request, response) {
-
-    var img = request.param('img');
-    var query = 'SELECT C_VALUE FROM TB_COMMON WHERE C_NAME = \'THUMB_DIR\'';
-
-    dbConn.query(query, function(error, results) {
-        logger.info('Query:', query);
-        if (error) {
-            logger.error('DB Error:', error);
-        } else {
-            var img_path = results[0].C_VALUE + '/' + img
-            fs.readFile(img_path, function(err, data) {
-                response.end(data);
-            });
-        }
-    });
-});
-
-app.all('/rateCount', CheckAuth, function(request, response) {
-
-    logger.info('Path change : /rateCount');
-
-    var cust_ctn = request.param('CUST_CTN');
-    var insert_date = request.param('INSERT_DATE');
-
-    var query = " SELECT sum(CNT) TOT,";
-    query += "       sum(NORMAL_CNT) NORMAL_CNT,";
-    query += "       sum(DARK_CNT) DARK_CNT, ";
-    query += "       sum(BRIGHT_CNT) BRIGHT_CNT, ";
-    query += "       sum(STOP_CNT) STOP_CNT, ";
-    query += "       sum(DIFF_CNT) DIFF_CNT ";
-    query += " from ( ";
-    query += "    SELECT count(1) CNT,";
-    query += "        case BRIGHT_LVL when '0' then count(1) else 0 end NORMAL_CNT,";
-    query += "        case BRIGHT_LVL when '1' then count(1) else 0 end DARK_CNT, ";
-    query += "        case BRIGHT_LVL when '2' then count(1) else 0 end BRIGHT_CNT, ";
-    query += "        case DIFF_LVL when '0' then count(1) else 0 end STOP_CNT, ";
-    query += "        case DIFF_LVL when '1' then count(1) else 0 end DIFF_CNT ";
-    query += "    from TB_THUMBIMG_ANA_HISTORY ";
-    query += "    where P_CUST_CTN = '" + cust_ctn + "' and P_INSERT_DATE = '" + insert_date + "'";
-    query += " group by P_CUST_CTN, P_INSERT_DATE, BRIGHT_LVL, DIFF_LVL ";
-    query += " ) a";
-
-    dbConn.query(query, function(error, results) {
-        logger.info('Query: ', query);
-
-        if (error) {
-            logger.error('DB Error: ', error);
-        } else {
-            
-
-            response.send(results[0]);
-
-        }
-
-    });
-});
-
-app.get('/openOrgImg', CheckAuth, function(request, response) {
-    logger.info('Path change : /openOrgImg');
-
-    fs.readFile('thumbnail_img.html', 'utf8', function(error, data) {
-        if (error) {
-            logger.error('Error:', error);
-        } else {
-            response.writeHead(200, {
-                'Content-Type': 'text/html; charset=UTF-8'
-            });
-            response.end(data);
-        }
-    });
-});
-
-app.all('/adminSessionDate', CheckAuth, function(request, response) {
-
-    logger.info('Path change : /rateCount');
-
-    var cust_ctn = request.param('CUST_CTN');
-    var insert_date = request.param('INSERT_DATE');
-
-    var query = " SELECT sum(CNT) TOT,";
-    query += "       sum(NORMAL_CNT) NORMAL_CNT,";
-    query += "       sum(DARK_CNT) DARK_CNT, ";
-    query += "       sum(BRIGHT_CNT) BRIGHT_CNT, ";
-    query += "       sum(STOP_CNT) STOP_CNT, ";
-    query += "       sum(DIFF_CNT) DIFF_CNT ";
-    query += " from ( ";
-    query += "    SELECT count(1) CNT,";
-    query += "        case BRIGHT_LVL when '0' then count(1) else 0 end NORMAL_CNT,";
-    query += "        case BRIGHT_LVL when '1' then count(1) else 0 end DARK_CNT, ";
-    query += "        case BRIGHT_LVL when '2' then count(1) else 0 end BRIGHT_CNT, ";
-    query += "        case DIFF_LVL when '0' then count(1) else 0 end STOP_CNT, ";
-    query += "        case DIFF_LVL when '1' then count(1) else 0 end DIFF_CNT ";
-    query += "    from TB_THUMBIMG_ANA_HISTORY ";
-    query += "    where P_CUST_CTN = '" + cust_ctn + "' and P_INSERT_DATE = '" + insert_date + "'";
-    query += " group by P_CUST_CTN, P_INSERT_DATE, BRIGHT_LVL, DIFF_LVL ";
-    query += " ) a";
-
-    dbConn.query(query, function(error, results) {
-        logger.info('Query: ', query);
-
-        if (error) {
-            logger.error('DB Error: ', error);
-        } else {
-            
-
-            response.send(results[0]);
-
-        }
-
-    });
-});
-
-
+*/
 
 app.post('/reportViewList', CheckAuth, function(request, response) {
 
@@ -9161,49 +6834,6 @@ app.post('/reportViewList', CheckAuth, function(request, response) {
     });
 });
 
-app.get('/getdata', CheckAuth, function(request, response) {
-    logger.info('Path change : /getdata');
-
-    fs.readFile('test.html', 'utf8', function(error, data) {
-        if (error) {
-            logger.error('Error:', error);
-        } else {
-            response.writeHead(200, {
-                'Content-Type': 'text/html; charset=UTF-8'
-            });
-            response.end(data);
-        }
-    });
-});
-
-/*
-app.post("/mLog",  function(request, response) {
-	var date = new Date().formatDate("yyyyMMdd");//파일날짜
-	var datetime = new Date().formatDate("yyyyMMddhhmmss");//로그시간
-
-	var filename = "app_log_"+date+".txt";
-	var a1 = request.param("CUSTOM_DATA");
-	var a2 = request.param("STACK_TRACE");
-
-
-	fs.exists(filename, function (exists) {
-		console.log(exists ? "it's there" : "no exists!");
-
-		var data = "";
-		if(exists){ //파일이 있으면 읽고
-			data = fs.readFileSync(""+filename,"utf8");//동기식 파일읽기
-		}
-
-		//로그내용
-		var mes = data+"\r\n\r\n-"+datetime+":\r\n" + a1 + "\r\n" + a2   ;
-		fs.writeFile(filename, ""+mes, "utf8", function(err) {
-			if (err) {
-				throw err;
-			}
-			logger.info(filename + " writeFile OK");
-		});
-	});
-});*/
 
 function mysqlSha2(a) {
     if (g_bEnableSha256) {
@@ -9213,6 +6843,9 @@ function mysqlSha2(a) {
     }
 }
 
+/**
+ * MAP
+ */
 app.get('/map', CheckAuth, function(request, response) {
 
     logger.info('Path change : /map');
@@ -9331,9 +6964,7 @@ app.get('/googleMapData', function(request, response) {
         if (error) {
             logger.error('DB Error:', error);
         } else {
-            
             response.send(decryptArray(results));
-            //response.send(results);
         }
     });
 });
@@ -9362,227 +6993,6 @@ app.get('/googleMapDataList', function(request, response) {
         }
     });
 });
-
-app.get('/vWorldXY', function(request, response) {
-    logger.info('Path change : /map');
-    fs.readFile('vWorld_xy.html', 'utf8', function(error, data) {
-        if (error) {
-            logger.error('Error:', error);
-        } else {
-            response.writeHead(200, {
-                'Content-Type': 'text/html; charset=UTF-8'
-            });
-            response.end(data);
-        }
-    });
-});
-
-//부서관리New
-app.get('/manageDeptNew', function(request, response) {
-
-    logger.info('Path change : /manageDeptNew');
-
-    fs.readFile('html/manage_dept_new.html', 'utf8', function(error, data) {
-
-        if (error) {
-            logger.error('Error:', error);
-        } else {
-            response.writeHead(200, {
-                'Content-Type': 'text/html; charset=UTF-8'
-            });
-            response.end(data);
-        }
-    });
-});
-
-
-//부서조회
-app.get('/manageDeptNewSelect', function(request, response) {
-    logger.info('Path change : /manageDeptNewSelect');
-
-    var g = request.param('g'); //대분류 1, 중분류 2 ,3 ,4
-    var CODE_01 = request.param('S_CODE_01');
-    var CODE_02 = request.param('S_CODE_02');
-    var CODE_03 = request.param('S_CODE_03');
-    var CODE_04 = request.param('S_CODE_04');
-
-    var whereQuery = "";
-    if (g == "1") whereQuery = " AND CODE_02='000' AND  CODE_03='000' AND  CODE_04='000' ";
-    else if (g == "2") whereQuery = " AND CODE_01='" + CODE_01 + "' AND CODE_02 !='000' AND CODE_03='000' AND CODE_04='000' ";
-    else if (g == "3") whereQuery = " AND CODE_01='" + CODE_01 + "' AND CODE_02='" + CODE_02 + "' AND CODE_03 !='000' AND CODE_04='000' ";
-    else if (g == "4") whereQuery = " AND CODE_01='" + CODE_01 + "' AND CODE_02='" + CODE_02 + "' AND CODE_03='" + CODE_03 + "' AND CODE_04 !='000' ";
-    else whereQuery = " AND CODE_01='xxx' ";
-
-    var query = "select * from TB_DEPT_DEPTH_NEW where DEL_YN='N' " + whereQuery + " ";
-
-    dbConn.query(query, function(error, results) {
-
-        logger.info('Query:', query);
-
-        if (error) {
-            logger.error('DB Error:', error);
-        } else {
-            
-            response.send(results);
-        }
-    });
-});
-
-//부서등록
-app.get('/manageDeptNewInsert', function(request, response) {
-    logger.info('Path change : /manageDeptNewInsert');
-
-    var g = request.param('g'); //대분류 1, 중분류 2 ,3 ,4
-    var CODE_01 = request.param('S_CODE_01');
-    var CODE_02 = request.param('S_CODE_02');
-    var CODE_03 = request.param('S_CODE_03');
-    var CODE_04 = request.param('S_CODE_04');
-    var CODE_NM = request.param('CODE_NM');
-
-    var whereQuery = "";
-    if (g == "1") {
-        CODE_01 = " (select substring(concat( '000' , ifnull(max(CODE_01),0) + 1), -3) from TB_DEPT_DEPTH_NEW A01 where CODE_02 = '000' and CODE_03 = '000' and CODE_04 = '000' ) ";
-        CODE_02 = "'000'";
-        CODE_03 = "'000'";
-        CODE_04 = "'000'";
-    } else if (g == "2") {
-        CODE_02 = " (select substring(concat( '000' , ifnull(max(CODE_02),0) + 1), -3) from TB_DEPT_DEPTH_NEW A01 where CODE_01 = '" + CODE_01 + "' and CODE_03 = '000' and CODE_04 = '000' ) ";
-        CODE_03 = "'000'";
-        CODE_04 = "'000'";
-        CODE_01 = "'" + CODE_01 + "'";
-    } else if (g == "3") {
-        CODE_03 = " (select substring(concat( '000' , ifnull(max(CODE_03),0) + 1), -3) from TB_DEPT_DEPTH_NEW A01 where CODE_01 = '" + CODE_01 + "' and CODE_02 = '" + CODE_02 + "' and CODE_04 = '000' ) ";
-        CODE_04 = "'000'";
-        CODE_01 = "'" + CODE_01 + "'";
-        CODE_02 = "'" + CODE_02 + "'";
-    } else if (g == "4") {
-        CODE_04 = " (select substring(concat( '000' , ifnull(max(CODE_04),0) + 1), -3) from TB_DEPT_DEPTH_NEW A01 where CODE_01 = '" + CODE_01 + "' and CODE_02 = '" + CODE_02 + "' and CODE_03 = '" + CODE_03 + "' ) ";
-        CODE_01 = "'" + CODE_01 + "'";
-        CODE_02 = "'" + CODE_02 + "'";
-        CODE_03 = "'" + CODE_03 + "'";
-    }
-
-    var query = " insert into TB_DEPT_DEPTH_NEW( CODE_01, CODE_02, CODE_03, CODE_04, CODE_NM, USER_YN ) ";
-    query += " values(" + CODE_01 + ", " + CODE_02 + ", " + CODE_03 + ", " + CODE_04 + ", '" + CODE_NM + "', 'Y'  )  ";
-
-    dbConn.query(query, function(error, results) {
-        logger.info('Query:', query);
-        if (error) {
-            logger.error('DB Error:', error);
-        } else {
-            
-            response.send(results);
-        }
-    });
-});
-
-//부서수정
-app.get('/manageDeptNewUpdate', function(request, response) {
-    logger.info('Path change : /manageDeptNewUpdate');
-
-    var g = request.param('g'); //대분류 1, 중분류 2 ,3 ,4
-    var CODE_01 = request.param('S_CODE_01');
-    var CODE_02 = request.param('S_CODE_02');
-    var CODE_03 = request.param('S_CODE_03');
-    var CODE_04 = request.param('S_CODE_04');
-    var CODE_NM = request.param('CODE_NM');
-
-    var query = " update TB_DEPT_DEPTH_NEW set CODE_NM = '" + CODE_NM + "' where CODE_01='" + CODE_01 + "' and CODE_02='" + CODE_02 + "' and CODE_03='" + CODE_03 + "' and CODE_04='" + CODE_04 + "' ";
-    dbConn.query(query, function(error, results) {
-
-        logger.info('Query:', query);
-
-        if (error) {
-            logger.error('DB Error:', error);
-        } else {
-            
-            response.send(results);
-        }
-    });
-});
-
-//부서삭제
-app.get('/manageDeptNewDelete', function(request, response) {
-    logger.info('Path change : /manageDeptNewDelete');
-
-    var g = request.param('g'); //대분류 1, 중분류 2 ,3 ,4
-    var CODE_01 = request.param('S_CODE_01');
-    var CODE_02 = request.param('S_CODE_02');
-    var CODE_03 = request.param('S_CODE_03');
-    var CODE_04 = request.param('S_CODE_04');
-    var CODE_NM = request.param('CODE_NM');
-
-    var query = " update TB_DEPT_DEPTH_NEW set DEL_YN = 'Y' where CODE_01='" + CODE_01 + "' and CODE_02='" + CODE_02 + "' and CODE_03='" + CODE_03 + "' and CODE_04='" + CODE_04 + "' ";
-
-    dbConn.query(query, function(error, results) {
-
-        logger.info('Query:', query);
-
-        if (error) {
-            logger.error('DB Error:', error);
-        } else {
-            
-            response.send(results);
-        }
-    });
-});
-
-
-
-//영상보기(PCView)
-app.get('/mediaPlayer', CheckAuthCommon, function(request, response) {
-    logger.info('Path change : /mediaPlayer');
-
-    fs.readFile('html/mediaPlayer.html', 'utf8', function(error, data) {
-
-        if (error) {
-            logger.error('Error:', error);
-        } else {
-            response.writeHead(200, {
-                'Content-Type': 'text/html; charset=UTF-8'
-            });
-            response.end(data);
-        }
-    });
-});
-
-
-//작업내용 등록
-// app.get('/workDatailSave', function(request, response) {
-//     logger.info('Path change : /workDatailSave');
-
-//     var s_userid = request.session.userid;
-
-//     var checkVar = request.param('checkVar');
-//     var subject = request.param('subject');
-//     var content = request.param('content');
-
-//     var checkVarList = checkVar.split("`"); //선택체크박스
-
-//     var queryS = "";
-//     for (var i = 1; i < checkVarList.length; i++) {
-//         var checkVarColumn = checkVarList[i].split(",");
-//         if (i > 1) queryS += ", ";
-//         queryS += "( '" + checkVarColumn[0] + "', '" + checkVarColumn[1] + "', '" + checkVarColumn[2] + "', '" + subject + "', '" + content + "', '" + s_userid + "', DATE_FORMAT(now(),'%Y%m%d%H%i%s')  ) ";
-//     }
-
-//     var query = " insert into TB_TERMINAL_IMAGE_TRANS_MEMO( P_CUST_CTN,P_CTN_DEVICE,P_INSERT_DATE,SUBJECT,CONTENT,ADMIN_ID, INSERT_DATE ) ";
-//     query += " values  ";
-//     query += queryS;
-
-//     dbConn.query(query, function(error, results) {
-
-//         logger.info('Query:', query);
-
-//         if (error) {
-//             logger.error('DB Error:', error);
-//         } else {
-            
-//             response.send(results);
-//         }
-//     });
-// });
-
 
 app.get('/workDatailList', function(request, response) {
     logger.info('Path change : /workDatailList : ');
@@ -9640,6 +7050,10 @@ app.get('/reportWorkList', function(request, response) {
     });
 });
 
+/**
+ * 가입 서비스 조회
+ */
+/*
 app.get('/service', CheckAuth, function(request, response) {
     logger.info('Path change: /service');
 
@@ -9706,398 +7120,12 @@ app.get('/getAdminCustomer', CheckAuth, function(request, response) {
         }
     });
 });
-
-/* 고객관리페이지 */
-app.get('/notcustomer', function(request, response) {
-    logger.info('Path change : /notcustomer');
-
-    fs.readFile('html2/notcustomer.html', 'utf8', function(error, data) {
-        //console.log('Query:', query);
-        if (error) {
-            logger.error('Error:', error);
-        } else {
-            response.writeHead(200, {
-                'Content-Type': 'text/html; charset=UTF-8'
-            });
-            response.end(data);
-        }
-    });
-});
-
-app.get('/cLogin', function(request, response) {
-    logger.info('Path change : /cLogin');
-
-    fs.readFile('html2/login.html', 'utf8', function(error, data) {
-        //console.log('Query:', query);
-        if (error) {
-            logger.error('Error:', error);
-        } else {
-            response.writeHead(200, {
-                'Content-Type': 'text/html; charset=UTF-8'
-            });
-            response.end(data);
-        }
-    });
-});
-
-app.get('/customer', CheckAuth, function(request, response) {
-    logger.info('Path change: /customer');
-
-    var id = request.session.userid;
-    var code_03 = request.session.code_03;
-
-    var query = "select CUST_ADMIN from TB_ADMIN ";
-    query += "where ADMIN_ID = '" + id + "' ";
-
-    dbConn.query(query, function(error, results) {
-        if (results[0].CUST_ADMIN != '1') {
-            response.redirect('/notcustomer');
-        } else {
-            fs.readFile('html2/customer.html', 'utf-8', function(error, data) {
-                response.writeHead(200, {
-                    'Content-Type': 'text/html; charset=UTF-8'
-                });
-                response.end(data);
-            });
-        }
-    });
-
-});
-
-app.get('/opening', CheckAuth, function(request, response) {
-    logger.info('Path change: /opening');
-
-    fs.readFile('html2/opening.html', 'utf-8', function(error, data) {
-
-        response.writeHead(200, {
-            'Content-Type': 'text/html; charset=UTF-8'
-        });
-        response.end(data);
-
-    });
-});
-
-app.get('/customerCount', function(request, response) {
-
-    var query = 'select count(*) as cnt from TB_CUSTOMER';
-
-    dbConn.query(query, function(error, results) {
-        logger.info('Query: ', query);
-
-        if (error) {
-            logger.error('DB Error: ', error);
-        } else {
-            
-            response.send(results[0]);
-        }
-
-    });
-
-});
-
-app.get('/customerSearchCount', function(request, response) {
-
-    var schtype = request.param('schtype');
-    var schval = request.param('schval');
-
-    var query = 'select count(*) as cnt from TB_CUSTOMER';
-    query += ' where 1=1 ';
-
-    if (schval != '') {
-        if (schtype == 'c_name') {
-            query += 'and CT_NAME like \"%' + schval + '%\" ';
-        }
-        if (schtype == 'essential') {
-            query += 'and SV_NECESSARY_SV like \"%' + schval + '%\" ';
-        }
-        if (schtype == 'storage') {
-            query += 'and SV_OP_SV_S like \"%' + schval + '%\" ';
-        }
-        if (schtype == 'status') {
-            query += 'and STATUS like \"%' + schval + '%\" ';
-        }
-        if (schtype == 'm_tel') {
-            query += 'and PSCR_TEL like \"%' + schval + '%\" ';
-        }
-        if (schtype == 'num') {
-            query += 'and JOIN_NUM like \"%' + schval + '%\" ';
-        }
-    }
-
-    dbConn.query(query, function(error, results) {
-        logger.info('Query: ', query);
-
-        if (error) {
-            logger.error('DB Error: ', error);
-        } else {
-            
-            response.send(results[0]);
-        }
-
-    });
-
-});
-
-app.all('/customerPaging', function(request, response) {
-
-    logger.info('Path change : /customerPaging');
-
-    var start = request.param('start');
-    var pageSize = request.param('pageSize');
-    //var c_name = request.param('c_name');
-    var schtype = request.param('schtype');
-    var schval = request.param('schval');
-    var orderbytype = request.param('orderbytype');
-    var orderbyval = request.param('orderbyval');
-
-    var query = 'select * from TB_CUSTOMER ';
-    query += 'where 1=1 ';
-
-    if (schval != '') {
-        if (schtype == 'c_name') {
-            query += 'and CT_NAME like \"%' + schval + '%\" ';
-        }
-        if (schtype == 'essential') {
-            query += 'and SV_NECESSARY_SV like \"%' + schval + '%\" ';
-        }
-        if (schtype == 'storage') {
-            query += 'and SV_OP_SV_S like \"%' + schval + '%\" ';
-        }
-        if (schtype == 'status') {
-            query += 'and STATUS like \"%' + schval + '%\" ';
-        }
-        if (schtype == 'm_tel') {
-            query += 'and PSCR_TEL like \"%' + schval + '%\" ';
-        }
-        if (schtype == 'num') {
-            query += 'and JOIN_NUM like \"%' + schval + '%\" ';
-        }
-    }
-
-    if (orderbyval != 'undefined' && orderbyval != null && orderbyval != '') {
-        query += 'order by ' + orderbyval + ' ' + orderbytype + ' ';
-    } else {
-        query += 'order by INSERT_DATE desc';
-    }
-
-    query += ' limit ' + start + ',' + pageSize + ' ';
-
-    dbConn.query(query, function(error, results) {
-        logger.info('Query: ', query);
-
-        if (error) {
-            logger.error('DB Error: ', error);
-        } else {
-            
-            response.send(results);
-        }
-
-    });
-});
-
-app.all('/insertCustomer', function(request, response) {
-
-    var session_id = request.session.userid;
-
-    var c_gubun = request.param("c_gubun");
-    var c_name = request.param("c_name");
-    var c_num = request.param("c_num");
-    var m_name = request.param("m_name");
-    var m_tel = request.param("m_tel");
-    var m_dept = request.param("m_dept");
-    var m_email = request.param("m_email");
-    var essential = request.param("essential");
-    var storage = request.param("storage");
-    var wearable = request.param("wearable");
-    var note = request.param("note");
-    var a_id = request.param("a_id");
-    var a_name = request.param("a_name");
-    var a_pw = request.param("a_pw");
-    var a_arank = request.param("a_arank");
-    var a_tel = request.param("a_tel");
-
-    if (storage == null || storage == 'null') {
-        storage = '4';
-    }
-
-    var v01 = " substring( concat('0000',ifnull((select max(CODE_03) from TB_DEPT_DEPTH a where GUBUN = '2' and CODE = '999'),0)+1),-3,3) ";
-
-    var query = 'INSERT INTO TB_CUSTOMER ' +
-        '(ADMIN_ID, CT_GUBUN, CT_NAME, CT_NUM, CT_START_DATE, PSCR_NM, PSCR_TEL, PSCR_POSITION, PSCR_EMAIL, SV_NECESSARY_SV, SV_OP_SV_S, SV_OP_SV_W, SV_OP_ETC, STATUS, INSERT_DATE, RGST_ID, CUSTOMER_CODE) ' +
-        'VALUES (?, ?, ?, ?, DATE_FORMAT(now(),"%Y%m%d"), ?, ?, ?, ?, ?, ?, ?, ? , ?, DATE_FORMAT(now(),"%Y%m%d%H%i%s"), ?, ' + v01 + ')';
-
-    dbConn.query(query, [a_id, c_gubun, c_name, c_num, m_name, m_tel, m_dept, m_email, essential, storage, wearable, note, "1", session_id], function(error, result) {
-        logger.info('Query: ', query);
-        if (error) {
-            logger.error('DB Error:', error);
-        } else {
-
-            var query2 = 'INSERT INTO TB_DEPT_DEPTH ' +
-                '(GUBUN, CODE, CODE_NM, CODE_03) VALUES ("1", "900", \'' + c_name + '\', ' + v01 + '),("2", "999" , \'' + c_name + '\', ' + v01 + '),("3",' + v01 + ',\'' + c_name + '\', ' + v01 + ') ';
-
-            dbConn.query(query2, function(error, result) {
-                logger.info('Query: ', query);
-                if (error) {
-                    logger.error('DB Error:', error);
-                } else {
-                    var code_03_max = "(select max(CODE_03) from TB_DEPT_DEPTH a where GUBUN = '2' and CODE = '999')";
-
-                    var query3 = 'INSERT INTO TB_ADMIN ' +
-                        '(ADMIN_ID, ADMIN_PW, ADMIN_NM, ADMIN_ARANK, ADMIN_LV, ADMIN_MOBILE_NUM, INSERT_DATE, CODE_01, CODE_02, CODE_03, CODE_ID) ' +
-                        'VALUES (?, ?, ?, ?, ?, ?, DATE_FORMAT(now(),"%Y%m%d%H%i%s"), ?, ?, ' + code_03_max + ', concat("900999",' + code_03_max + '))';
-
-                    dbConn.query(query3, [a_id, a_pw, a_name, a_arank, '1', a_tel, '900', '999'], function(error, result) {
-                        logger.info('Query: ', query);
-                        if (error) {
-                            logger.error('DB Error:', error);
-                        } else {
-                            response.send(a_id);
-                        }
-                    });
-
-                }
-            });
-
-
-        }
-    });
-});
-
-app.all('/insertCustomerHistory', function(request, response) {
-
-    var session_id = request.session.userid;
-
-    var c_gubun = request.param("c_gubun");
-    var c_name = request.param("c_name");
-    var c_num = request.param("c_num");
-    var m_name = request.param("m_name");
-    var m_tel = request.param("m_tel");
-    var m_dept = request.param("m_dept");
-    var m_email = request.param("m_email");
-    var essential = request.param("essential");
-    var storage = request.param("storage");
-    var wearable = request.param("wearable");
-    var note = request.param("note");
-    var a_id = request.param("a_id");
-
-    var query = 'INSERT INTO TB_CUSTOMER_HISTORY ' +
-        '(ADMIN_ID, CT_GUBUN, CT_NAME, CT_NUM, CT_START_DATE, PSCR_NM, PSCR_TEL, PSCR_POSITION, PSCR_EMAIL, SV_NECESSARY_SV, SV_OP_SV_S, SV_OP_SV_W, SV_OP_ETC, STATUS, INSERT_DATE, RGST_ID) ' +
-        'VALUES (?, ?, ?, ?, DATE_FORMAT(now(),"%Y%m%d"), ?, ?, ?, ?, ?, ?, ?, ? , ?, DATE_FORMAT(now(),"%Y%m%d%H%i%s"), ?)';
-
-    dbConn.query(query, [a_id, c_gubun, c_name, c_num, m_name, m_tel, m_dept, m_email, essential, storage, wearable, note, "1", session_id], function(error, result) {
-        logger.info('Query: ', query);
-        if (error) {
-            logger.error('DB Error:', error);
-        } else {
-            response.send(a_id);
-        }
-    });
-});
-
-
-app.all('/updateCustomer', CheckAuth, function(request, response) {
-    logger.info('Path change : /updateCustomer');
-
-    var join_num = request.param("join_num");
-    var c_gubun = request.param("c_gubun");
-    var c_name = request.param("c_name");
-    var c_num = request.param("c_num");
-    var m_name = request.param("m_name");
-    var m_tel = request.param("m_tel");
-    var m_dept = request.param("m_dept");
-    var m_email = request.param("m_email");
-    var essential = request.param("essential");
-    var storage = request.param("storage");
-    var wearable = request.param("wearable");
-    var note = request.param("note");
-    var status = request.param("status");
-    var a_id = request.param("a_id");
-
-    var query = 'UPDATE TB_CUSTOMER SET JOIN_NUM=?, CT_GUBUN=?, CT_NAME=?, CT_NUM=?, PSCR_NM=?, PSCR_TEL=?, PSCR_POSITION=?, PSCR_EMAIL=?, SV_NECESSARY_SV=?, SV_OP_SV_S=?, SV_OP_SV_W=?, SV_OP_ETC=?, STATUS=?, UPDATE_DATE=DATE_FORMAT(now(),"%Y%m%d%H%i%s") WHERE ADMIN_ID=?';
-
-    dbConn.query(query, [join_num, c_gubun, c_name, c_num, m_name, m_tel, m_dept, m_email, essential, storage, wearable, note, status, a_id], function(error, result) {
-
-        if (error) {
-            logger.error('DB Error:', error);
-        } else {
-            
-            response.send(a_id);
-        }
-    });
-});
-
-app.all('/customerList', function(request, response) {
-
-    logger.info('Path change : /customerList');
-
-    var admin_id = request.param('admin_id');
-
-    var query = 'select a.*, b.*,a.STATUS as svc_status from TB_CUSTOMER a';
-    query += ' left join('
-    query += ' SELECT *'
-    query += ' FROM '
-    query += 'TB_ADMIN'
-    query += ') b '
-    query += 'on a.ADMIN_ID = b.ADMIN_ID'
-    query += ' where a.ADMIN_ID = \'' + admin_id + '\' ';
-
-    dbConn.query(query, function(error, results) {
-        logger.info('Query: ', query);
-
-        if (error) {
-            logger.error('DB Error: ', error);
-        } else {
-            
-            response.send(results[0]);
-        }
-
-    });
-});
-
-app.all('/customerListInfo', function(request, response) {
-
-    logger.info('Path change : /customerListInfo');
-
-    var code_03 = request.session.code_03;
-
-    var query = 'select * from TB_CUSTOMER ';
-    query += ' where CUSTOMER_CODE = \'' + code_03 + '\' ';
-
-    dbConn.query(query, function(error, results) {
-        logger.info('Query: ', query);
-
-        if (error) {
-            logger.error('DB Error: ', error);
-        } else {
-            
-            results[0].PSCR_NM = utilLib.masking_name(results[0].PSCR_NM);
-            results[0].PSCR_TEL = utilLib.masking_tel(results[0].PSCR_TEL);
-            results[0].CT_NUM = utilLib.masking_num(results[0].CT_NUM);
-
-            response.send(results[0]);
-        }
-
-    });
-});
-
-app.get('/top2', function(request, response) {
-
-    fs.readFile('html2/top.html', 'utf8', function(error, data) {
-
-        var session_id = request.session.userid;
-        var session_lv = request.session.userlv;
-        var s_date = request.session.s_date;
-
-        response.send(ejs.render(data, {
-            data: {
-                'session': session_id,
-                'session_lv': session_lv,
-                's_date': s_date
-            }
-        }));
-    });
-});
-
+*/
+
+/**
+ * front end 부분은 reverse proxy 서버로 이동
+ */
+/*
 app.get('/notAccess', function(request, response) {
     logger.info('Path change : /notAccess');
 
@@ -10113,7 +7141,12 @@ app.get('/notAccess', function(request, response) {
         }
     });
 });
+*/
 
+/**
+ * rtmp 관리
+ */
+/*
 app.get('/rtmp', CheckAuth, function(request, response) {
     logger.info('Path change : /rtmp');
 
@@ -10289,9 +7322,12 @@ app.all('/isValidRtmpId', function(request, response) {
 
     });
 });
+*/
 
-/* 패스워드 초기화 */
-
+/**
+ * 계정관리는 setup api로 이동
+ */
+/*
 app.get('/pwReset', function(request, response) {
     logger.info('Path change : /pwReset');
 
@@ -10338,79 +7374,6 @@ app.get('/superadmin', function(request, response) {
 
 });
 
-app.get('/fileDelete', function(request, response) {
-
-    var file_nm = request.param('file_nm');
-    var cust_ctn = request.param('cust_ctn');
-    var insert_date = request.param('insert_date');
-
-    var query = 'SELECT C_VALUE FROM TB_COMMON WHERE C_NAME = \'UP DIR\''
-
-    dbConn.query(query, function(error, results) {
-
-        logger.info('Query:', query);
-        if (error) {
-            logger.error('DB Error:', error);
-        } else {
-            
-
-            if (typeof results[0] != 'undefined') {
-
-                var dir = results[0].C_VALUE;
-                var file = dir + "/" + file_nm;
-
-                var exec = require('child_process').exec,
-                    child;
-
-                child = exec('unlink ' + file,
-                    function(error, stdout, stderr) {
-                        if (error !== null) {
-                            console.log('exec error: ' + error);
-                            response.send({
-                                "result": "fail",
-                                "reason": "file delete error"
-                            });
-                        } else {
-                            logger.info('fiie delete request id : ', request.session.userid, ' ', file_nm);
-                            var query3 = util.format('DELETE FROM TB_LOCATION_HISTORY WHERE P_CUST_CTN = \'%s\' and P_INSERT_DATE = \'%s\'', cust_ctn, insert_date);
-                            dbConn.query(query3, function(error, result) {
-                                logger.info('Query:', query3)
-                            });
-
-                            var query2 = 'UPDATE TB_TERMINAL_IMAGE_TRANS SET UPLOAD_FILE_NM = "", UPLOAD_FILE_SZ = 0 WHERE INSERT_DATE = \'' + insert_date + '\' and CUST_CTN = \'' + cust_ctn + '\' ';
-
-                            dbConn.query(query2, function(error, result) {
-                                logger.info('UPDATE TB_TERMINAL_IMAGE_TRANS Query:', query2);
-                            });
-
-                            response.send({
-                                "result": "success",
-                                "file_nm": file_nm
-                            });
-                        }
-                    });
-
-                /* fs.unlink(file, function (err) {
-            		if (err) {
-            			logger.error('cannot deleted file' + err);
-            		}else {
-            			var query2 = 'UPDATE TB_TERMINAL_IMAGE_TRANS SET UPLOAD_FILE_NM = "" WHERE INSERT_DATE = \''+insert_date+'\' and CUST_CTN = \''+ cust_ctn +'\' ';
-
-                		dbConn.query(query2, function (error, result) {
-                        	logger.info('UPDATE TB_TERMINAL_IMAGE_TRANS Query:', query2);
-                		});
-
-                        response.send(file_nm);
-            		}
-            	});*/
-
-            }
-
-        }
-
-    });
-
-});
 
 app.post('/adminCheck', function(request, response) {
     logger.info('Path change : /adminCheck');
@@ -10458,54 +7421,6 @@ app.get('/adminConfirm1', CheckAuth, function(request, response) {// checkauth
     });
 });
 
-app.post('/revgeocoding', function(request, response) {
-    logger.info('Path change : /revgeocoding');
-
-    logger.info('HOST :', request.param('HOST'));
-    logger.info('PORT :', request.param('PORT'));
-    logger.info('PATH :', request.param('PATH'));
-    logger.info('LOCATION_X :', request.param('LOCATION_X'));
-    logger.info('LOCATION_Y :', request.param('LOCATION_Y'));
-
-    var bodyString = '{"cutflag":"0","coordtype":"1","startposition":"0","reqcount":"0","posx":"' + request.param('LOCATION_Y') + '","posy":"' + request.param('LOCATION_X') + '"}';
-    /*
-    var bodyString = {
-    	'cutflag':'0',
-    	'coordtype':'1',
-    	'startposition':'0',
-    	'reqcount':'0',
-    	'posx':request.param('LOCATION_X'),
-    	'posy':request.param('LOCATION_Y')
-    }
-    */
-    logger.info('revgeocoding body :', bodyString);
-    logger.info('revgeocoding length :', bodyString.length);
-
-    var headers = {
-        'Content-Type': 'application/json;charset=UTF-8',
-        'Content-Length': bodyString.length,
-        'apiVersion': '1.0.0',
-        'apiType': '01',
-        'devInfo': '03',
-        'authKey': 'beb570f165d54351b34729828ea704da',
-        'svcId': 'b506df83b8884710b233ce78b699245b'
-    };
-    // toss direct 접속
-    var options = {
-        host: request.param('HOST'),
-        port: request.param('PORT'),
-        path: request.param('PATH'),
-        method: 'POST',
-        headers: headers
-    };
-    var callback = function(response1) {
-        response1.on('data', function(data) {
-            logger.info('revgeocoding response: ', data.toString());
-            response.send(data);
-        });
-    }
-    https.request(options, callback).write(bodyString);
-});
 
 app.all('/adminModify2', CheckAuthCommon, function(request, response) {
     logger.info('Path change : /adminModify2');
@@ -10614,23 +7529,6 @@ app.get('/pwChange', CheckPwCommon, function(request, response) {
     });
 });
 
-app.get('/alert', function(request, response) {
-    var reValue = request.param('reValue');
-    console.log("alert_reValue :" + reValue);
-    logger.info('Path change : /alert');
-    fs.readFile('html/alert.html', 'utf8', function(error, data) {
-        if (error) {
-            logger.error('Error:', error);
-        } else {
-            response.send(ejs.render(data, {
-                data: {
-                    'reValue': reValue
-                }
-            }));
-        }
-    });
-});
-
 app.post('/pwChange', CheckAuthCommon, function(request, response) {
     var key_id = request.param('key_id');
     logger.info('Path change : /pwChange');
@@ -10696,6 +7594,7 @@ app.post('/adminPwCheckChange', pwValidator, function(request, response) {
         }
     });
 });
+*/
 
 app.post('/pageout', function(request, response) {
     logger.info('Path change : /pageout');
@@ -10765,6 +7664,10 @@ app.get('/service/output/count', CheckAuth, function(request, response) {
 });
 
 // VOD 시에 AR offset 정보
+/**
+ * AR서비스도 윈도우 어플리케이션으로 대체되므로 필요 없음
+ */
+/*
 app.get('/ar/service', CheckAuth, function (request, response) {
     logger.info('Path change : /ar/service');
 
@@ -10799,8 +7702,12 @@ app.get('/ar/service', CheckAuth, function (request, response) {
         }
     });
 });
+*/
 
-
+/**
+ * 북마크 기능은 안 쓰임
+ */
+/*
 app.get('/modbookTitle', CheckAuth, function(request, response) {
     logger.info('Path change : /modbookTitle');
 
@@ -10989,8 +7896,13 @@ logger.info('Path change : /updateConnCnt');
   });
 
 });
+*/
 
 // 토스 연동
+/**
+ * 토스 연동도 안 쓰임
+ */
+/*
 app.get('/tossReport', function(request, response) {
 	var urlquery = request.url;
 
@@ -11299,6 +8211,7 @@ app.get('/DeleteToss', function(request, response) {
         }
 	});
 });
+*/
 
 app.post('/adminPwReset', function (request,response){
     logger.info('Path change : /adminPwReset');
@@ -11318,123 +8231,13 @@ app.post('/adminPwReset', function (request,response){
     })
 })
 
-app.get('/pcviewer-check', CheckAuth, function(request, response) {
-
-var query = 'SELECT (SELECT C_VALUE FROM TB_COMMON WHERE C_NAME = \'IPADDR\')';
-    query += ' AS IPADDR, ';
-    query += '(SELECT C_VALUE FROM TB_COMMON WHERE C_NAME = \'RTSP_URL\')';
-    query += ' AS RTSP_URL, ';
-    query += '(SELECT C_VALUE FROM TB_COMMON WHERE C_NAME = \'CTL_PORT\')';
-    query += ' AS CTL_PORT ';
-
-    dbConn.query(query, function(error, results) {
-
-        logger.info('Query:', query);
-        if (error) {
-            logger.info('DB Error:', error);
-        } else {
-            response.send(results[0]);
-        }
-    });
-});
-
-app.get('/lctGoogle', function(request, response) {
-    logger.info('Path change : /lctGoogle : ');
-
-    //var g = request.param('g');
-    //var f_date = request.param('f_date');
-    //var t_date = request.param('t_date');
-    var ctn = request.param('ctn');
-    var date = request.param('date');
-    var userid = request.session.userid;
-
-    var query;
 
 
-    logger.info('map : ', ctn);
-    var queryS = "    ";
-    if (ctn != undefined && ctn != 'undefined' && (ctn == "google" || ctn == "vworld" || ctn == "lguplus")) { //지도뷰어(큰창)
-
-        query = util.format('SELECT CTN_DEVICE, CUST_CTN, LIST.INSERT_DATE, HIS.*' +
-            ' FROM TB_LOCATION_HISTORY HIS,' +
-            ' (SELECT A.CTN_DEVICE, A.CUST_CTN, A.INSERT_DATE' +
-            ' FROM TB_TERMINAL_IMAGE_TRANS A, (' +
-            ' SELECT P_CUST_CTN,P_INSERT_DATE' +
-            ' FROM (' +
-            ' SELECT P_CUST_CTN,P_INSERT_DATE, INSERT_DATE, STATUS,' +
-            ' (CASE @vP_CUST_CTN WHEN A.P_CUST_CTN THEN @rownum:=@rownum+1 ELSE @rownum:=1 END) rank,' +
-            ' (@vP_CUST_CTN:=A.P_CUST_CTN) vP_CUST_CTN' +
-            ' from TB_LOCATION_ADMIN_MAPPING A, (SELECT @vP_CUST_CTN:=\'\', @rownum:=0 FROM DUAL) B' +
-            ' where A.ADMIN_ID = \'%s\'' +
-            ' order by P_CUST_CTN, INSERT_DATE desc' +
-            ' ) LIST' +
-            ' WHERE RANK = 1 AND STATUS < \'3\'' +
-            ' ) B' +
-            ' WHERE A.STATUS < \'3\' AND A.CUST_CTN = B.P_CUST_CTN AND A.INSERT_DATE = B.P_INSERT_DATE' +
-            ' ) LIST' +
-            ' WHERE HIS.P_CUST_CTN = LIST.CUST_CTN AND HIS.P_INSERT_DATE = LIST.INSERT_DATE and HIS.P_CUST_CTN > \'0\'', userid);
-
-        /*
-        queryS += "  and concat(P_CUST_CTN,P_INSERT_DATE) in ( ";
-        queryS += "  select concat(CUST_CTN,INSERT_DATE) from ( ";
-        queryS += " 		 SELECT   ";
-        queryS += " 			 a.CUST_CTN ,   a.INSERT_DATE ,   ";
-        queryS += " 			(SELECT status  FROM TB_LOCATION_ADMIN_MAPPING i  WHERE i.P_CUST_CTN=a.CUST_CTN  AND i.P_INSERT_DATE=a.INSERT_DATE  AND i.ADMIN_ID = '"+userid+"' ORDER BY i.INSERT_DATE DESC limit 0, 1  ) as mapstatus ";
-        queryS += " 		 FROM TB_TERMINAL_IMAGE_TRANS a  ";
-        queryS += " 		 WHERE status < 3  ";
-        queryS += " 		 ORDER BY INSERT_DATE desc ";
-        queryS += "  ) p where mapstatus < 3  ) ";
-        */
-    } else if (ctn != undefined && ctn != 'undefined') { // 작은창 0000`20160000
-        var ctnVarList = ctn.split(","); //선택체크박스
-        var dateVarList = date.split(","); //선택체크박스
-
-        query = util.format('SELECT HIS.*, CTN_DEVICE FROM TB_LOCATION_HISTORY HIS LEFT JOIN TB_TERMINAL_IMAGE_TRANS TER' +
-            ' ON HIS.P_CUST_CTN = TER.CUST_CTN AND HIS.P_INSERT_DATE = TER.INSERT_DATE' +
-            ' WHERE HIS.P_CUST_CTN = \'%s\' AND HIS.P_INSERT_DATE = \'%s\' ORDER BY INSERT_DATE DESC LIMIT 0, 50', ctnVarList[0], dateVarList[0]);
-        /*
-		for(var i=0 ; i< ctnVarList.length; i++ ){
-			if( i > 0) queryS += " or ";
-			queryS += " ( P_CUST_CTN='"+ctnVarList[i]+"' and P_INSERT_DATE='"+dateVarList[i] +"' ) ";
-		}
-		queryS = " AND ("+queryS+")";
-		*/
-    } else { //값이 없을때
-        //queryS += " AND P_CUST_CTN ='xxxx' and P_INSERT_DATE='xxxx'  ";
-        query = util.format('SELECT HIS.*, CTN_DEVICE FROM TB_LOCATION_HISTORY HIS LEFT JOIN TB_TERMINAL_IMAGE_TRANS TER' +
-            ' ON HIS.P_CUST_CTN = TER.CUST_CTN AND HIS.P_INSERT_DATE = TER.INSERT_DATE' +
-            ' WHERE HIS.P_CUST_CTN = \'%s\' AND HIS.P_INSERT_DATE = \'%s\'', '', '');
-    }
-
-    /*
-    var query = "";
-
-	    query += " SELECT  ";
-		query += " P.*  ";
-		query += " ,(select CTN_DEVICE FROM TB_TERMINAL_IMAGE_TRANS i WHERE  P.P_CUST_CTN=i.CUST_CTN  AND P.P_INSERT_DATE=i.INSERT_DATE  limit 0, 1) as CTN_DEVICE FROM TB_LOCATION_HISTORY P WHERE LOCATION_X > 1  ";
-		query += queryS;
-		query += " ORDER BY P_CUST_CTN ,P_INSERT_DATE, INSERT_DATE    ";
-	*/
-
-    dbConn.query(query, function(error, results) {
-
-        logger.info('Query:', query);
-        if (error) {
-            logger.error('DB Error:', error);
-        } else {
-            //logger.info('DB success');
-            response.send(decryptArray(results));
-            //response.send(results);
-        }
-    });
-});
 
 exports.dbConn = dbConn;
-// exports.client = client;
 exports.droneResult = droneResult;
 exports.g_lcsAddrIP = g_lcsAddrIP;
-// exports.io = io;
-exports._io = _io;
+// exports._io = _io;
 exports.cloudLib = cloudLib;
 exports.pcViewerAPI = pcViewerAPI;
 exports.pushServiceAPI = pushServiceAPI;

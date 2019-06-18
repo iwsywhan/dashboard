@@ -9,6 +9,9 @@ router.get('/top', loginC.topstate);
 router.get('/logout', loginC.logout);
 router.get('/logout2', loginC.logout2);
 
-router.get('/check/:tken', loginC.tken);
+/**
+ * reverse proxy에서 처리
+ */
+// router.get('/check/:tken', loginC.tken);
 
 module.exports = router;

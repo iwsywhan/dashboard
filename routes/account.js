@@ -3,7 +3,6 @@ var router = express.Router();
 var bodyParser = require('body-parser');
 var logger = require('../libs/logger');
 var fs = require('fs');
-var ejs = require('ejs');
 var pcViewerAPI = require('../pcViewerAPI.js');
 var LiveCam2UTM = require('../libs/LiveCam2UTM');
 var Protocol = require('../libs/Protocol');

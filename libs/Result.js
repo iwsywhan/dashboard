@@ -1,7 +1,7 @@
 var logger = require('./logger');
 var util = require('util');
 var EventEmitter = require('events').EventEmitter;
-var entries = require('object.entries');
+// var entries = require('object.entries');
 var url = require('url');
 
 var DEF_API_MANDANTORY_PARAM = {
